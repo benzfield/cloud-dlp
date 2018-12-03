@@ -173,6 +173,7 @@ paths:
 
         ## 2. 请求JSON实例说明
         > 示例1：使用系统内置敏感实体进行识别。该示例对指定的内容value进行PERSON和LOCATION识别
+        
         ```
         {
           "inspect_config": {
@@ -187,8 +188,10 @@ paths:
           }
         }
         ```
+        
         ---
         > 示例2：使用用户自定义的CustomEntity对Table进行识别
+        
         ```
         {
           "inspect_config": {
@@ -255,6 +258,7 @@ paths:
         ```
         ---
         > 示例3：使用系统支持的所有敏感实体进行图片中的敏感数据识别
+        
         ```
         {
           "inspect_config": {
