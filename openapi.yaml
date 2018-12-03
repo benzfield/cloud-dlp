@@ -16,11 +16,11 @@ info:
     name: Yunanbao Developer
 tags:
   - name: Entity
-    description: 类型资源的操作
+    description: 敏感实体的操作方法
   - name: Content
-    description: 类型资源的操作
+    description: 敏感数据智能识别与脱敏的操作方法
   - name: Image
-    description: 类型资源的操作
+    description: 图片脱敏的操作方法
 paths:
   /api/v1/entities:
     get:
@@ -52,22 +52,27 @@ paths:
               * code, 状态码，成功时OK
               * msg，状态消息
             * entities，为敏感实体数组，数组中每个元素为Entity对象，包含了name和description信息。
-            ---
-            具体请参考以下Example和Model。
+
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListEntitiesResponse'
               examples:
                 success:
+                  summary: 成功
                   value:
-                    status: {"code": OK, "msg": "成功"}
-                    entities: [{
-                      "name": "PERSON", "description": "人名"
-                    }]
+                    status: 
+                      code: "OK"
+                      msg: "成功"
+                    entities:
+                      - name: "PERSON"
+                        description: "人名"
+                      - name: "LOCATION"
+                        description: "地名"
                 failure:
+                  summary: 失败
                   value:
-                    status: {"code": OK, "msg": "成功"}
+                    status: {"code": ENTITY_NOT_FOUND, "msg": "没有找到敏感实体"}
                     entities: [{
                       "name": "PERSON", "description": "人名"
                     }]
@@ -261,7 +266,7 @@ paths:
                     byte_item: 
                       type: IMAGE_JPEG
                       data: 此处为图片二进制数据的base64编码
-                      
+
       responses:
         '200':
           description: |
