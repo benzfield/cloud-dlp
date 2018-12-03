@@ -6,7 +6,7 @@ servers:
 info:
   description: |
     CloudDLP API提供敏感数据的智能识别与脱敏，包括对字符串、文件、数据表、图片进行识别与脱敏处理。有关更多CloudDLP信息，请查阅云安宝官网[http://yunanbao.com.cn]
-  version: "1.2.0-SNAPSHOT"
+  version: "1.2.2-SNAPSHOT"
   title: 云安宝CloudDLP API指南
   contact:
     email: wangab@yunanbao.com.cn
@@ -56,6 +56,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListEntitiesResponse'
+              examples:
+                success:
+                  value:
+                    status: {"code": OK, "msg": "成功"}
+                    entities: [{
+                      "name": "PERSON", "description": "人名"
+                    }]
+                failure:
+                  value:
+                    status: {"code": OK, "msg": "成功"}
+                    entities: [{
+                      "name": "PERSON", "description": "人名"
+                    }]
   /api/v1/content:inspect:
     post:
       tags:
@@ -2395,11 +2408,6 @@ components:
             $ref: '#/components/schemas/Entity'
       description: |-
         系统敏感实体列表应答
-      example:
-        status: {"code": OK, "msg": "成功"}
-        entities: [{
-          "name": "PERSON", "description": "人名"
-        }]
     PrimitiveTransformation:
       type: object
       properties:
