@@ -42,8 +42,8 @@ paths:
         * BANK_CARD_NUMBER
         * DOMAIN
 
-        column1 | column2
-        --------|--------
+        实体标识 | 描述
+        -------|------
         abc | def
         
         更多敏感实体还在持续增加中
