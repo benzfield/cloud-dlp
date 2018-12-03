@@ -253,9 +253,8 @@ paths:
               inspect_image:
                 summary: 识别图片中的敏感数据
                 value:
-                  inspect_config: 
+                  inspect_config:
                     entities: []
-                    custom_entities: [
                     min_likelihood: POSSIBLE
                     exclude_entities: false
                   item: 
