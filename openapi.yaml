@@ -44,7 +44,18 @@ paths:
 
         实体标识 | 描述
         -------|------
-        abc | def
+        PERSON | 姓名
+        LOCATION | 地址
+        ORGANIZATION | 组织机构
+        AGE | 年龄
+        DATE | 日期
+        CHINA_RESIDENT_ID | 中国居民身份证号码
+        CHINA_MOBILE | 中国手机号码
+        EMAIL | 邮箱地址
+        IP_ADDRESS | IP地址
+        MAC_ADDRESS | MAC地址，以空格:/-隔开
+        BANK_CARD_NUMBER | 银行卡号（16位或18位）
+        DOMAIN | 域名
         
         更多敏感实体还在持续增加中
       operationId: ListEntities
