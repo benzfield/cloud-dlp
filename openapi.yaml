@@ -77,78 +77,148 @@ paths:
         * DOMAIN
         
         更多敏感实体还在持续增加中
-      operationId: InspectContent
-      requestBody:
-        description: |
-          # 1. 请求JSON格式说明
-          敏感数据识别的JSON请求体，JSON请求的对象请参考InspectContentRequest定义，一个InspectContentRequest对象中可包含以下子JSON对象：
-          * inspect_config，该对象指定了识别的配置信息。可以配置的信息有：
-            * entities， 指定实体识别的列表，为空时系统会使用所有内置的实体进行识别。仅指定Entity的name即可，包含PERSON和LOCATION的实体列表示例如下：
+        
+        # 1. 请求JSON格式说明
+        敏感数据识别的JSON请求体，JSON请求的对象请参考InspectContentRequest定义，一个InspectContentRequest对象中可包含以下子JSON对象：
+        * inspect_config，该对象指定了识别的配置信息。可以配置的信息有：
+          * entities， 指定实体识别的列表，为空时系统会使用所有内置的实体进行识别。仅指定Entity的name即可，包含PERSON和LOCATION的实体列表示例如下：
+            ```
+            [
+              {"name": "PERSON"}
+              {"name": "LOCATION"}
+            ]
+            ```
+          * min_likelihood，Likelihood的枚举类型，标识识别的最小精度，默认值: LIKELIHOOD_UNSPECIFIED。只有当识别精度大于等于min_likelihood，才会在识别结果中返回。Likelihood的枚举值参考如下：
+            ```
+            - LIKELIHOOD_UNSPECIFIED: 未指定
+            - VERY_UNLIKELY: 非常不相似
+            - UNLIKELY: 较不相似
+            - POSSIBLE: 可能相似
+            - LIKELY: 较相似
+            - VERY_LIKELY: 非常相似
+            ```
+          * exclude_entities，该选项与entities配合使用，当为真时，对除了entities中其他所有的敏感实体进行识别。默认为**false**。
+          * custom_entities, 用户可自定义敏感实体和识别规则。custom_entites可与entities并存。当同时指定时，系统会首先使用entities中指定的实体进行识别，再次使用用户自定义的custom_entities进行识别。custom_entities中是包含了CustomEntity对象的数组。
+            #### **每个CustomEntity对象包括以下**：
+            * entity，Entity类型，标识自定义实体对象的名称和描述
+            * likelihood，使用regex或dictionary识别后的初始精度值
+            * regex或者dictionary，为CustomEntity指定一种识别规则，可以为regex或者dicionary，二选一。
+              * regex，使用正则表达式规则进行识别。regex可以指定pattern和大小写敏感等选项，例如：
+                ```
+                {
+                  "pattern": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,6}",
+                  "case_insensitive": false
+                }
+                ```
+              * dictionary，使用字典规则进行识别，指定字典的单词或短语的列表，例如包含城市的字典定义如下：
+                ```
+                {
+                  "word_list": {
+                    "words": [
+                      "北京",
+                      "台北",
+                      "香港"
+                    ]
+                  }
+                }
+                ```
+            * detection_rules，此为CustomEntity的高级选项。每个CustomEntity可以配置二次识别的规则，对CustomEntity的regex或dictionary识别结果进行动态精度调整。
+              * 例如：对内容"V1.3.0.1"识别时，其中“1.3.0.1”被识别成IP地址，根据上下文此标识为版本号，可对识别成IP实体的Likelyhood进行动态调节LikelihoodAdjustment，降低其初次识别精度。
+              * 例如：对内容"IP 1.3.0.1"识别时，其中“1.3.0.1”被识别成IP地址，根据上下文此标识为IP，可对识别成IP实体的Likelyhood进行动态调节LikelihoodAdjustment，增大其初次识别精度detection_rule是包含DetectionRule对象的数组。
+
+              DetectionRule的对象中包含HotwordRule子对象，由HotwordRule进行二次识别，HotwordRule对象定义如下：
+              * hotword_regex，二次识别的正则表达式对象
+              * proximity，二次识别的上下文范围。其定义如下：
+                ```
+                "proximity": {
+                  "window_before": 10,
+                  "window_after": 10
+                }
+                ```
+                其中，window_before是向前查找的字符个数，window_after是向后查找的字符个数。
+              * likelihood_adjustment，hotword_regex成功匹配后，对CustomEntity的likelihood进行调节。调节的值分为两种：
+                * 使用固定的fixed_likelihood值覆盖初始的likelihood值
+                * 使用浮动的relative_likelihood值与初始的likelihood值进行加法运算。如：relative_likelihood为1，初始的likelihood为POSSIBLE，相加后为POSSIBE+1=LIKELY
+
+              detection_rules示例，在识别结果的前后上下文向前10个字符，向后10个字符搜索"ip"的特征，如果匹配成功则将likelihood值加2，如下：
               ```
               [
-                {"name": "PERSON"}
-                {"name": "LOCATION"}
-              ]
-              ```
-            * min_likelihood，Likelihood的枚举类型，标识识别的最小精度，默认值: LIKELIHOOD_UNSPECIFIED。只有当识别精度大于等于min_likelihood，才会在识别结果中返回。Likelihood的枚举值参考如下：
-              ```
-              - LIKELIHOOD_UNSPECIFIED: 未指定
-              - VERY_UNLIKELY: 非常不相似
-              - UNLIKELY: 较不相似
-              - POSSIBLE: 可能相似
-              - LIKELY: 较相似
-              - VERY_LIKELY: 非常相似
-              ```
-            * exclude_entities，该选项与entities配合使用，当为真时，对除了entities中其他所有的敏感实体进行识别。默认为**false**。
-            * custom_entities, 用户可自定义敏感实体和识别规则。custom_entites可与entities并存。当同时指定时，系统会首先使用entities中指定的实体进行识别，再次使用用户自定义的custom_entities进行识别。custom_entities中是包含了CustomEntity对象的数组。
-              #### **每个CustomEntity对象包括以下**：
-              * entity，Entity类型，标识自定义实体对象的名称和描述
-              * likelihood，使用regex或dictionary识别后的初始精度值
-              * regex或者dictionary，为CustomEntity指定一种识别规则，可以为regex或者dicionary，二选一。
-                * regex，使用正则表达式规则进行识别。regex可以指定pattern和大小写敏感等选项，例如：
-                  ```
-                  {
-                    "pattern": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,6}",
-                    "case_insensitive": false
-                  }
-                  ```
-                * dictionary，使用字典规则进行识别，指定字典的单词或短语的列表，例如包含城市的字典定义如下：
-                  ```
-                  {
-                    "word_list": {
-                      "words": [
-                        "北京",
-                        "台北",
-                        "香港"
-                      ]
+                {
+                  "hotword_rule": {
+                    "hotword_regex": {
+                      "pattern": "ip",
+                      "case_insensitive": true
+                    },
+                    "proximity": {
+                      "window_before": 10,
+                      "window_after": 10
+                    },
+                    "likelihood_adjustment": {
+                      "relative_likelihood": 2
                     }
                   }
-                  ```
-              * detection_rules，此为CustomEntity的高级选项。每个CustomEntity可以配置二次识别的规则，对CustomEntity的regex或dictionary识别结果进行动态精度调整。
-                * 例如：对内容"V1.3.0.1"识别时，其中“1.3.0.1”被识别成IP地址，根据上下文此标识为版本号，可对识别成IP实体的Likelyhood进行动态调节LikelihoodAdjustment，降低其初次识别精度。
-                * 例如：对内容"IP 1.3.0.1"识别时，其中“1.3.0.1”被识别成IP地址，根据上下文此标识为IP，可对识别成IP实体的Likelyhood进行动态调节LikelihoodAdjustment，增大其初次识别精度detection_rule是包含DetectionRule对象的数组。
-                
-                DetectionRule的对象中包含HotwordRule子对象，由HotwordRule进行二次识别，HotwordRule对象定义如下：
-                * hotword_regex，二次识别的正则表达式对象
-                * proximity，二次识别的上下文范围。其定义如下：
-                  ```
-                  "proximity": {
-                    "window_before": 10,
-                    "window_after": 10
-                  }
-                  ```
-                  其中，window_before是向前查找的字符个数，window_after是向后查找的字符个数。
-                * likelihood_adjustment，hotword_regex成功匹配后，对CustomEntity的likelihood进行调节。调节的值分为两种：
-                  * 使用固定的fixed_likelihood值覆盖初始的likelihood值
-                  * 使用浮动的relative_likelihood值与初始的likelihood值进行加法运算。如：relative_likelihood为1，初始的likelihood为POSSIBLE，相加后为POSSIBE+1=LIKELY
-                
-                detection_rules示例，在识别结果的前后上下文向前10个字符，向后10个字符搜索"ip"的特征，如果匹配成功则将likelihood值加2，如下：
-                ```
-                [
+                }
+              ]
+              ```
+            *更多有关CustomEntity的定义请参考CustomEntity的定义*。
+          * ### 以下为inspect_config的更多高级选项：
+          * limits，识别结果大小的限制，可参考FindingLimits对象定义*（可选）*
+        ---
+        * item，类型为ContentItem，该对象指定了待识别的内容，必须是以下三种类型的一种：
+          * value，string类型。
+          * table，Table类型，请参考Table对象。
+          * byte_item，ByteContentItem类型字节流。例如从文件中读取的字节流。
+        ---
+        * inspect_rule_name，指定的inspect规则[该选项尚未支持]，本版本中无须指定。说明：用户可以事先将inspect_config存储为inspect_rule对象，调用该接口时可以指定inspect_rule_name来加载之前存储的inspect_config对象而无需每次都指定inspect_config，当inspect_config和inspect_rule_name同时指定的，系统会merge两个对象的配置，当两个对象存在相同的设置时以inspect_config优先。
+
+        ## 2. 请求JSON实例说明
+        > 示例1：使用系统内置敏感实体进行识别。该示例对指定的内容value进行PERSON和LOCATION识别
+        ```
+        {
+          "inspect_config": {
+            # 指定了对PERSON和LOCATION进行识别，当entities为空时
+            # 将使用系统内置的敏感实体进行识别
+            "entities": [
+              {"name": "PERSON"}, 
+              {"name": "LOCATION"}
+            ]
+
+            # 指定了识别的精度必须是POSSIBLE及以上
+            "min_likelihood": "POSSIBLE",
+          },
+
+          # 指定了待识别的内容
+          "item": {
+            "value": "我叫王中华，家住北京市朝阳区"
+          }
+        }
+        ```
+        ---
+        > 示例2：使用用户自定义的CustomEntity对Table进行识别
+        ```
+        {
+          "inspect_config": {
+            # 指定了对PERSON和LOCATION进行识别，当entities为空时
+            # 将使用系统内置的敏感实体进行识别
+            "entities": [
+              {"name": "PERSON"}, 
+              {"name": "LOCATION"}
+            ]，
+            "custom_entities": [
+              {
+                "entity": {
+                  "name": "CUSTOM_NAME"
+                },
+                "likelihood": "POSSIBLE",
+                "regex": {
+                  "pattern": "(Tom|Tony)"
+                  "case_insensitive": true
+                },
+                "detection_rules": [
                   {
                     "hotword_rule": {
                       "hotword_regex": {
-                        "pattern": "ip",
+                        "pattern": "name",
                         "case_insensitive": true
                       },
                       "proximity": {
@@ -161,130 +231,61 @@ paths:
                     }
                   }
                 ]
-                ```
-              *更多有关CustomEntity的定义请参考CustomEntity的定义*。
-            * ### 以下为inspect_config的更多高级选项：
-            * limits，识别结果大小的限制，可参考FindingLimits对象定义*（可选）*
-          ---
-          * item，类型为ContentItem，该对象指定了待识别的内容，必须是以下三种类型的一种：
-            * value，string类型。
-            * table，Table类型，请参考Table对象。
-            * byte_item，ByteContentItem类型字节流。例如从文件中读取的字节流。
-          ---
-          * inspect_rule_name，指定的inspect规则[该选项尚未支持]，本版本中无须指定。说明：用户可以事先将inspect_config存储为inspect_rule对象，调用该接口时可以指定inspect_rule_name来加载之前存储的inspect_config对象而无需每次都指定inspect_config，当inspect_config和inspect_rule_name同时指定的，系统会merge两个对象的配置，当两个对象存在相同的设置时以inspect_config优先。
-          
-          ## 2. 请求JSON实例说明
-          > 示例1：使用系统内置敏感实体进行识别。该示例对指定的内容value进行PERSON和LOCATION识别
-          ```
-          {
-            "inspect_config": {
-              # 指定了对PERSON和LOCATION进行识别，当entities为空时
-              # 将使用系统内置的敏感实体进行识别
-              "entities": [
-                {"name": "PERSON"}, 
+              }
+            ]
+            # 指定了识别的精度必须是POSSIBLE及以上
+            "min_likelihood": "POSSIBLE",
+          },
+
+          # 指定了待识别的内容
+          "item": {
+            "table": {
+              "headers": [
+                {"name": "ID"},
+                {"name": "NAME"},
                 {"name": "LOCATION"}
-              ]
-            
-              # 指定了识别的精度必须是POSSIBLE及以上
-              "min_likelihood": "POSSIBLE",
-            },
-            
-            # 指定了待识别的内容
-            "item": {
-              "value": "我叫王中华，家住北京市朝阳区"
-            }
-          }
-          ```
-          ---
-          > 示例2：使用用户自定义的CustomEntity对Table进行识别
-          ```
-          {
-            "inspect_config": {
-              # 指定了对PERSON和LOCATION进行识别，当entities为空时
-              # 将使用系统内置的敏感实体进行识别
-              "entities": [
-                {"name": "PERSON"}, 
-                {"name": "LOCATION"}
-              ]，
-              "custom_entities": [
+              ],
+              "rows": [
                 {
-                  "entity": {
-                    "name": "CUSTOM_NAME"
-                  },
-                  "likelihood": "POSSIBLE",
-                  "regex": {
-                    "pattern": "(Tom|Tony)"
-                    "case_insensitive": true
-                  },
-                  "detection_rules": [
-                    {
-                      "hotword_rule": {
-                        "hotword_regex": {
-                          "pattern": "name",
-                          "case_insensitive": true
-                        },
-                        "proximity": {
-                          "window_before": 10,
-                          "window_after": 10
-                        },
-                        "likelihood_adjustment": {
-                          "relative_likelihood": 2
-                        }
-                      }
-                    }
-                  ]
+                  "values": [
+                    "string_value": "0001", 
+                    "string_value": "Jim", 
+                    "string_value": "NewYork"]
+                },
+                {
+                  "values": [
+                    "string_value": "0002", 
+                    "string_value": "Tom", 
+                    "string_value": "Beijing"]
                 }
               ]
-              # 指定了识别的精度必须是POSSIBLE及以上
-              "min_likelihood": "POSSIBLE",
-            },
-            
-            # 指定了待识别的内容
-            "item": {
-              "table": {
-                "headers": [
-                  {"name": "ID"},
-                  {"name": "NAME"},
-                  {"name": "LOCATION"}
-                ],
-                "rows": [
-                  {
-                    "values": [
-                      "string_value": "0001", 
-                      "string_value": "Jim", 
-                      "string_value": "NewYork"]
-                  },
-                  {
-                    "values": [
-                      "string_value": "0002", 
-                      "string_value": "Tom", 
-                      "string_value": "Beijing"]
-                  }
-                ]
-              }
             }
           }
-          ```
-          ---
-          > 示例3：使用系统支持的所有敏感实体进行图片中的敏感数据识别
-          ```
-          {
-            "inspect_config": {
-              # 将使用系统内置的敏感实体进行识别
-              "entities": []，
-              # 指定了识别的精度必须是POSSIBLE及以上
-              "min_likelihood": "POSSIBLE",
-            },
-            
-            # 指定了待识别的内容
-            "item": {
-              "byte_item": {
-                "type": "IMAGE_JPEG",
-                "data": "此处为图片二进制数据的base64编码"
-              }
+        }
+        ```
+        ---
+        > 示例3：使用系统支持的所有敏感实体进行图片中的敏感数据识别
+        ```
+        {
+          "inspect_config": {
+            # 将使用系统内置的敏感实体进行识别
+            "entities": []，
+            # 指定了识别的精度必须是POSSIBLE及以上
+            "min_likelihood": "POSSIBLE",
+          },
+
+          # 指定了待识别的内容
+          "item": {
+            "byte_item": {
+              "type": "IMAGE_JPEG",
+              "data": "此处为图片二进制数据的base64编码"
             }
           }
-          ```
+        }
+        ```
+      operationId: InspectContent
+      requestBody:
+        description: 敏感数据识别请求对象InspectContentRequest，请参考InspectContentRequest对象定义。
         required: true
         content:
           application/json:
