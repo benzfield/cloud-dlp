@@ -29,18 +29,6 @@ paths:
       summary: 获取敏感实体列表
       description: |
         获取当前系统中支持的敏感数据实体列表。系统默认的敏感实体包括：
-        * PERSON
-        * LOCATION
-        * ORGANIZATION
-        * AGE
-        * DATE
-        * CHINA_RESIDENT_ID
-        * CHINA_MOBILE
-        * EMAIL
-        * IP_ADDRESS
-        * MAC_ADDRESS
-        * BANK_CARD_NUMBER
-        * DOMAIN
 
         实体标识 | 描述
         -------|------
@@ -57,7 +45,7 @@ paths:
         BANK_CARD_NUMBER | 银行卡号（16位或18位）
         DOMAIN | 域名
         
-        更多敏感实体还在持续增加中
+        *更多敏感实体还在持续增加中*
       operationId: ListEntities
       responses:
         '200':
@@ -2372,7 +2360,7 @@ components:
           $ref: '#/components/schemas/Status'
         entities:
           type: array
-          title: 实体列表
+          description: 敏感实体列表
           items:
             $ref: '#/components/schemas/Entity'
       description: |-
