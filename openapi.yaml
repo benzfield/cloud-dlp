@@ -1512,6 +1512,7 @@ components:
       type: object
       properties:
         min:
+          title: 最小值
           $ref: '#/components/schemas/Value'
         max:
           $ref: '#/components/schemas/Value'
@@ -1534,7 +1535,6 @@ components:
       default: BYTES_TYPE_UNSPECIFIED
       description: |-
         识别内容的文件类型
-
          - BYTES_TYPE_UNSPECIFIED: 未指定
          - IMAGE: 通用的图片数据
          - IMAGE_JPEG: JPEG格式文件
@@ -1546,7 +1546,7 @@ components:
          - DOC_WORD: WORD格式文件
          - DOC_PDF: PDF格式文件
          - DOC_XLS: EXCEL格式文件
-      title: BytesType
+      title: 字节类型
     CharsToIgnoreCommonCharsToIgnore:
       type: string
       enum:
@@ -2169,7 +2169,7 @@ components:
         description:
           type: string
           title: 描述
-          maxlength: 1024
+          maxLength: 1024
       description: 敏感数据实体的定义
       required:
         - name
