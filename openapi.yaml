@@ -75,8 +75,7 @@ paths:
         * MAC_ADDRESS
         * BANK_CARD_NUMBER
         * DOMAIN
-        
-        更多敏感实体还在持续增加中
+        *更多敏感实体还在持续增加中*
         
         # 1. 请求JSON格式说明
         敏感数据识别的JSON请求体，JSON请求的对象请参考InspectContentRequest定义，一个InspectContentRequest对象中可包含以下子JSON对象：
@@ -172,7 +171,7 @@ paths:
         * inspect_rule_name，指定的inspect规则[该选项尚未支持]，本版本中无须指定。说明：用户可以事先将inspect_config存储为inspect_rule对象，调用该接口时可以指定inspect_rule_name来加载之前存储的inspect_config对象而无需每次都指定inspect_config，当inspect_config和inspect_rule_name同时指定的，系统会merge两个对象的配置，当两个对象存在相同的设置时以inspect_config优先。
 
         ## 2. 请求JSON实例说明
-        > 示例1：使用系统内置敏感实体进行识别。该示例对指定的内容value进行PERSON和LOCATION识别
+        * 示例1：使用系统内置敏感实体进行识别。该示例对指定的内容value进行PERSON和LOCATION识别
         
         ```
         {
@@ -190,7 +189,7 @@ paths:
         ```
         
         ---
-        > 示例2：使用用户自定义的CustomEntity对Table进行识别
+        * 示例2：使用用户自定义的CustomEntity对Table进行识别
         
         ```
         {
@@ -257,7 +256,7 @@ paths:
         }
         ```
         ---
-        > 示例3：使用系统支持的所有敏感实体进行图片中的敏感数据识别
+        * 示例3：使用系统支持的所有敏感实体进行图片中的敏感数据识别
         
         ```
         {
@@ -365,7 +364,7 @@ paths:
                 ```
             
             ## 2. 应答JSON实例说明
-            > 示例1：使用系统内置敏感实体进行识别。该示例对指定的内容value进行PERSON和LOCATION识别的结果如下：
+            * 示例1：使用系统内置敏感实体进行识别。该示例对指定的内容value进行PERSON和LOCATION识别的结果如下：
             ```
             {
               "status": {
@@ -407,7 +406,7 @@ paths:
             }
             ```
             ---
-            > 示例2：使用用户自定义的CustomEntity对Table进行识别的结果
+            * 示例2：使用用户自定义的CustomEntity对Table进行识别的结果
             ```
             {
               "status": {
@@ -447,8 +446,9 @@ paths:
               }
             }
             ```
+            
             ---
-            > 示例3：使用系统支持的所有敏感实体进行图片中的敏感数据识别结果
+            * 示例3：使用系统支持的所有敏感实体进行图片中的敏感数据识别结果
             ```
             {
               "status": {
