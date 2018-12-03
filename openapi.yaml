@@ -1,0 +1,2690 @@
+openapi: 3.0.0
+# Added by API Auto Mocking Plugin
+servers:
+  - description: CloudDLP API Auto Mocking
+    url: http://192.168.30.106:30080
+info:
+  description: |
+    CloudDLP API提供敏感数据的智能识别与脱敏，包括对字符串、文件、数据表、图片进行识别与脱敏处理。有关更多CloudDLP信息，请查阅云安宝官网[http://yunanbao.com.cn]
+  version: "1.2.0-SNAPSHOT"
+  title: 云安宝CloudDLP API指南
+  contact:
+    email: wangab@yunanbao.com.cn
+    url: http://yunanbao.com.cn
+    name: Yunanbao Developer
+tags:
+  - name: Entity
+    description: 类型资源的操作
+  - name: Content
+    description: 类型资源的操作
+  - name: Image
+    description: 类型资源的操作
+paths:
+  /api/v1/entities:
+    get:
+      tags:
+        - Entity
+      summary: 获取敏感实体列表
+      description: |
+        获取当前系统中支持的敏感数据实体列表。系统默认的敏感实体包括：
+        * PERSON
+        * LOCATION
+        * ORGANIZATION
+        * AGE
+        * DATE
+        * CHINA_RESIDENT_ID
+        * CHINA_MOBILE
+        * EMAIL
+        * IP_ADDRESS
+        * MAC_ADDRESS
+        * BANK_CARD_NUMBER
+        * DOMAIN
+        
+        更多敏感实体还在持续增加中
+      operationId: ListEntities
+      responses:
+        '200':
+          description: |-
+            成功时，返回应答状态和敏感实体数组。具体包括：
+            * status，为状态应答，具体参考Status。status包含以下元素：
+              * code, 状态码，成功时OK
+              * msg，状态消息
+            * entities，为敏感实体数组，数组中每个元素为Entity对象，包含了name和description信息。
+            ---
+            具体请参考以下Example和Model。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEntitiesResponse'
+  /api/v1/content:inspect:
+    post:
+      tags:
+        - Content
+      summary: 对给定数据中潜藏的敏感数据进行识别
+      description: |
+        对给定数据中潜藏的敏感数据进行识别。在请求中可以指定的Entity或CustomEntity进行敏感数据识别，未指定时系统将使用默认的敏感数据实体进行识别，默认的敏感识别包括：
+        * PERSON
+        * LOCATION
+        * ORGANIZATION
+        * AGE
+        * DATE
+        * CHINA_RESIDENT_ID
+        * CHINA_MOBILE
+        * EMAIL
+        * IP_ADDRESS
+        * MAC_ADDRESS
+        * BANK_CARD_NUMBER
+        * DOMAIN
+        
+        更多敏感实体还在持续增加中
+      operationId: InspectContent
+      requestBody:
+        description: |
+          # 1. 请求JSON格式说明
+          敏感数据识别的JSON请求体，JSON请求的对象请参考InspectContentRequest定义，一个InspectContentRequest对象中可包含以下子JSON对象：
+          * inspect_config，该对象指定了识别的配置信息。可以配置的信息有：
+            * entities， 指定实体识别的列表，为空时系统会使用所有内置的实体进行识别。仅指定Entity的name即可，包含PERSON和LOCATION的实体列表示例如下：
+              ```
+              [
+                {"name": "PERSON"}
+                {"name": "LOCATION"}
+              ]
+              ```
+            * min_likelihood，Likelihood的枚举类型，标识识别的最小精度，默认值: LIKELIHOOD_UNSPECIFIED。只有当识别精度大于等于min_likelihood，才会在识别结果中返回。Likelihood的枚举值参考如下：
+              ```
+              - LIKELIHOOD_UNSPECIFIED: 未指定
+              - VERY_UNLIKELY: 非常不相似
+              - UNLIKELY: 较不相似
+              - POSSIBLE: 可能相似
+              - LIKELY: 较相似
+              - VERY_LIKELY: 非常相似
+              ```
+            * exclude_entities，该选项与entities配合使用，当为真时，对除了entities中其他所有的敏感实体进行识别。默认为**false**。
+            * custom_entities, 用户可自定义敏感实体和识别规则。custom_entites可与entities并存。当同时指定时，系统会首先使用entities中指定的实体进行识别，再次使用用户自定义的custom_entities进行识别。custom_entities中是包含了CustomEntity对象的数组。
+              #### **每个CustomEntity对象包括以下**：
+              * entity，Entity类型，标识自定义实体对象的名称和描述
+              * likelihood，使用regex或dictionary识别后的初始精度值
+              * regex或者dictionary，为CustomEntity指定一种识别规则，可以为regex或者dicionary，二选一。
+                * regex，使用正则表达式规则进行识别。regex可以指定pattern和大小写敏感等选项，例如：
+                  ```
+                  {
+                    "pattern": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,6}",
+                    "case_insensitive": false
+                  }
+                  ```
+                * dictionary，使用字典规则进行识别，指定字典的单词或短语的列表，例如包含城市的字典定义如下：
+                  ```
+                  {
+                    "word_list": {
+                      "words": [
+                        "北京",
+                        "台北",
+                        "香港"
+                      ]
+                    }
+                  }
+                  ```
+              * detection_rules，此为CustomEntity的高级选项。每个CustomEntity可以配置二次识别的规则，对CustomEntity的regex或dictionary识别结果进行动态精度调整。
+                * 例如：对内容"V1.3.0.1"识别时，其中“1.3.0.1”被识别成IP地址，根据上下文此标识为版本号，可对识别成IP实体的Likelyhood进行动态调节LikelihoodAdjustment，降低其初次识别精度。
+                * 例如：对内容"IP 1.3.0.1"识别时，其中“1.3.0.1”被识别成IP地址，根据上下文此标识为IP，可对识别成IP实体的Likelyhood进行动态调节LikelihoodAdjustment，增大其初次识别精度detection_rule是包含DetectionRule对象的数组。
+                
+                DetectionRule的对象中包含HotwordRule子对象，由HotwordRule进行二次识别，HotwordRule对象定义如下：
+                * hotword_regex，二次识别的正则表达式对象
+                * proximity，二次识别的上下文范围。其定义如下：
+                  ```
+                  "proximity": {
+                    "window_before": 10,
+                    "window_after": 10
+                  }
+                  ```
+                  其中，window_before是向前查找的字符个数，window_after是向后查找的字符个数。
+                * likelihood_adjustment，hotword_regex成功匹配后，对CustomEntity的likelihood进行调节。调节的值分为两种：
+                  * 使用固定的fixed_likelihood值覆盖初始的likelihood值
+                  * 使用浮动的relative_likelihood值与初始的likelihood值进行加法运算。如：relative_likelihood为1，初始的likelihood为POSSIBLE，相加后为POSSIBE+1=LIKELY
+                
+                detection_rules示例，在识别结果的前后上下文向前10个字符，向后10个字符搜索"ip"的特征，如果匹配成功则将likelihood值加2，如下：
+                ```
+                [
+                  {
+                    "hotword_rule": {
+                      "hotword_regex": {
+                        "pattern": "ip",
+                        "case_insensitive": true
+                      },
+                      "proximity": {
+                        "window_before": 10,
+                        "window_after": 10
+                      },
+                      "likelihood_adjustment": {
+                        "relative_likelihood": 2
+                      }
+                    }
+                  }
+                ]
+                ```
+              *更多有关CustomEntity的定义请参考CustomEntity的定义*。
+            * ### 以下为inspect_config的更多高级选项：
+            * limits，识别结果大小的限制，可参考FindingLimits对象定义*（可选）*
+          ---
+          * item，类型为ContentItem，该对象指定了待识别的内容，必须是以下三种类型的一种：
+            * value，string类型。
+            * table，Table类型，请参考Table对象。
+            * byte_item，ByteContentItem类型字节流。例如从文件中读取的字节流。
+          ---
+          * inspect_rule_name，指定的inspect规则[该选项尚未支持]，本版本中无须指定。说明：用户可以事先将inspect_config存储为inspect_rule对象，调用该接口时可以指定inspect_rule_name来加载之前存储的inspect_config对象而无需每次都指定inspect_config，当inspect_config和inspect_rule_name同时指定的，系统会merge两个对象的配置，当两个对象存在相同的设置时以inspect_config优先。
+          
+          ## 2. 请求JSON实例说明
+          > 示例1：使用系统内置敏感实体进行识别。该示例对指定的内容value进行PERSON和LOCATION识别
+          ```
+          {
+            "inspect_config": {
+              # 指定了对PERSON和LOCATION进行识别，当entities为空时
+              # 将使用系统内置的敏感实体进行识别
+              "entities": [
+                {"name": "PERSON"}, 
+                {"name": "LOCATION"}
+              ]
+            
+              # 指定了识别的精度必须是POSSIBLE及以上
+              "min_likelihood": "POSSIBLE",
+            },
+            
+            # 指定了待识别的内容
+            "item": {
+              "value": "我叫王中华，家住北京市朝阳区"
+            }
+          }
+          ```
+          ---
+          > 示例2：使用用户自定义的CustomEntity对Table进行识别
+          ```
+          {
+            "inspect_config": {
+              # 指定了对PERSON和LOCATION进行识别，当entities为空时
+              # 将使用系统内置的敏感实体进行识别
+              "entities": [
+                {"name": "PERSON"}, 
+                {"name": "LOCATION"}
+              ]，
+              "custom_entities": [
+                {
+                  "entity": {
+                    "name": "CUSTOM_NAME"
+                  },
+                  "likelihood": "POSSIBLE",
+                  "regex": {
+                    "pattern": "(Tom|Tony)"
+                    "case_insensitive": true
+                  },
+                  "detection_rules": [
+                    {
+                      "hotword_rule": {
+                        "hotword_regex": {
+                          "pattern": "name",
+                          "case_insensitive": true
+                        },
+                        "proximity": {
+                          "window_before": 10,
+                          "window_after": 10
+                        },
+                        "likelihood_adjustment": {
+                          "relative_likelihood": 2
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+              # 指定了识别的精度必须是POSSIBLE及以上
+              "min_likelihood": "POSSIBLE",
+            },
+            
+            # 指定了待识别的内容
+            "item": {
+              "table": {
+                "headers": [
+                  {"name": "ID"},
+                  {"name": "NAME"},
+                  {"name": "LOCATION"}
+                ],
+                "rows": [
+                  {
+                    "values": [
+                      "string_value": "0001", 
+                      "string_value": "Jim", 
+                      "string_value": "NewYork"]
+                  },
+                  {
+                    "values": [
+                      "string_value": "0002", 
+                      "string_value": "Tom", 
+                      "string_value": "Beijing"]
+                  }
+                ]
+              }
+            }
+          }
+          ```
+          ---
+          > 示例3：使用系统支持的所有敏感实体进行图片中的敏感数据识别
+          ```
+          {
+            "inspect_config": {
+              # 将使用系统内置的敏感实体进行识别
+              "entities": []，
+              # 指定了识别的精度必须是POSSIBLE及以上
+              "min_likelihood": "POSSIBLE",
+            },
+            
+            # 指定了待识别的内容
+            "item": {
+              "byte_item": {
+                "type": "IMAGE_JPEG",
+                "data": "此处为图片二进制数据的base64编码"
+              }
+            }
+          }
+          ```
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InspectContentRequest'
+            example:
+              inspect_config: 
+                entities: [
+                  {"name": "PERSON"},
+                  {"name": "CHINA_MOBILE"}]
+                custom_entities: [
+                  {
+                    "entity": {
+                      "name": "PERSON_ENGLISH_NAME"
+                    },
+                    "likelihood": "POSSIBLE",
+                    "regex": {
+                      "pattern": "(jay)",
+                      "case_insensitive": true
+                    }
+                  }]
+                min_likelihood: POSSIBLE
+                exclude_entities: false
+              item: 
+                value: 我叫周杰伦（Jay），身份证号320902198101011000,  北京市手机13683130000，邮箱zjl@yunanbao.com.cn
+      responses:
+        '200':
+          description: |
+            # 1. 应答JSON格式说明
+            敏感数据识别的JSON应答体，JSON对象请参考InspectContentResponse定义，一个InspectContentResponse对象中可包含以下子JSON对象：
+            * status，包含应答的状态码和消息。
+            ---
+            * result，类型InspectResult。result中包含一个findings的数组，该数组中的每个对象的类型为Finding。每个Finding对象均表示一个敏感信息内容，包括：原始数据内容、实体类别、精度、位置等信息。
+              ```
+              {
+                "findings": [Finding对象]
+              }
+              ```
+              Finding对象的定义如下：
+              * quote，string类型，敏感实体的原始内容
+              * entity，Entity类型，识别后的敏感实体类型
+              * likelihood，识别后的精度值
+              * location，识别的敏感信息在原始信息中的位置。location是以下位置的组合：
+                * byte_range，Range对象，标识敏感数据在字节位置[start, end]
+                * codepoint_range，Range对象，标识敏感数据在字符位置[start, end]
+                * content_location，ContentLocation对象。根据识别的数据的类型，content_location的可能是其中三者之一。
+                  * record_location，当识别的数据为table时，该字段标识敏感数据在table中的位置。例如，敏感数据在0列10行，字段名称为"NAME"的位置：
+                    ```
+                    {
+                      "field_id": {
+                        "name": "NAME"
+                      },
+                      "col_index": "0",
+                      "row_index": "10"
+                    }
+                    ```
+                  * image_location，当识别的数据为image时，该字段标识敏感数据在image中的矩形位置。例如，敏感数据box位于左上角的矩形位置：
+                    ```
+                    {
+                      "bounding_boxes": [
+                        {
+                          "top": 10,
+                          "left": 30,
+                          "width": 100,
+                          "height": 100
+                        }
+                      ]
+                    }
+                    ```
+                  * document_location，当识别的数据为pdf、doc、ppt文档时，该字段标识敏感数据在文档中的第几页的位置信息。例如：
+                    ```
+                    {
+                      "page_num": 10
+                    }
+                    ```
+              * create_time，识别的时间
+                #### _**以下字段仅在脱敏接口中使用到，在识别接口中请忽略以下字段：**_
+              * deidentified，boolean类型。是否对该敏感进行了脱敏处理（该字段仅在脱敏接口中使用）
+              * deidentified_value，string类型。敏感实体数据脱敏后的值（该字段仅在脱敏接口中使用）
+              * redact_color，Color类型。图片中敏感实体遮罩的颜色（该字段仅在图片遮罩接口中使用）。Color为rgb值，范围0-255，例如：
+                ```
+                {
+                  "red": 0,
+                  "green": 0,
+                  "blue": 0
+                }
+                ```
+            
+            ## 2. 应答JSON实例说明
+            > 示例1：使用系统内置敏感实体进行识别。该示例对指定的内容value进行PERSON和LOCATION识别的结果如下：
+            ```
+            {
+              "status": {
+                "code": "OK",
+                "msg": "成功"
+              },
+              "result": {
+                "findings": [
+                  {
+                    "quote": "王中华",
+                    "entity": {
+                      "name": "PERSON"
+                    },
+                    "likelihood": "POSSIBLE",
+                    "location": {
+                      "byte_range": {
+                        "start": 2,
+                        "end": 5
+                      }
+                    },
+                    "create_time": "2018-12-02T09:35:30.495Z",
+                  },
+                  {
+                    "quote": "北京市朝阳区",
+                    "entity": {
+                      "name": "LOCATION"
+                    },
+                    "likelihood": "POSSIBLE",
+                    "location": {
+                      "byte_range": {
+                        "start": 8,
+                        "end": 14
+                      }
+                    },
+                    "create_time": "2018-12-02T09:35:30.495Z",
+                  }
+                ]
+              }
+            }
+            ```
+            ---
+            > 示例2：使用用户自定义的CustomEntity对Table进行识别的结果
+            ```
+            {
+              "status": {
+                "code": "OK",
+                "msg": "成功"
+              },
+              "result": {
+                "findings": [
+                  {
+                    "quote": "Tom",
+                    "entity": {
+                      "name": "CUSTOM_NAME"
+                    },
+                    "likelihood": "POSSIBLE",
+                    "location": {
+                      "byte_range": {
+                        "start": 0,
+                        "end": 3
+                      },
+                      "codepoint_range": {
+                        "start": 0,
+                        "end": 3
+                      },
+                      "content_location": {
+                        "record_location": {
+                          "field_id": {
+                            "name": "NAME"
+                          },
+                          "col_index": 1,
+                          "row_index": 1
+                        }
+                      }
+                    },
+                    "create_time": "2018-12-02T09:35:30.495Z",
+                  }
+                ]
+              }
+            }
+            ```
+            ---
+            > 示例3：使用系统支持的所有敏感实体进行图片中的敏感数据识别结果
+            ```
+            {
+              "status": {
+                "code": "OK",
+                "msg": "成功"
+              },
+              "result": {
+                "findings": [
+                  {
+                    "quote": "雷淑英",
+                    "entity": {
+                      "name": "PERSON"
+                    },
+                    "likelihood": "POSSIBLE",
+                    "location": {
+                      "byte_range": {
+                        "start": 0,
+                        "end": 3
+                      },
+                      "codepoint_range": {
+                        "start": 0,
+                        "end": 3
+                      },
+                      "content_location": {
+                        "image_location": {
+                          "bounding_boxes": [
+                            {
+                              "top": 10,
+                              "left": 30,
+                              "width": 100,
+                              "height": 100
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "create_time": "2018-12-02T09:35:30.495Z",
+                  }
+                ]
+              }
+            }
+            ```
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectContentResponse'
+  /api/v1/content:deidentify:
+    post:
+      tags:
+        - Content
+      summary: 对给定数据中潜藏的敏感数据进行脱敏
+      description: |
+        对给定数据中潜藏的敏感数据进行脱敏。在请求中可以指定特定的Entity或CustomEntity进行敏感数据脱敏，未指定时系统将使用默认的敏感数据实体进行识别并脱敏，默认的敏感识别包括：
+        * PERSON
+        * LOCATION
+        * ORGANIZATION
+        * AGE
+        * DATE
+        * CHINA_RESIDENT_ID
+        * CHINA_MOBILE
+        * EMAIL
+        * IP_ADDRESS
+        * MAC_ADDRESS
+        * BANK_CARD_NUMBER
+        * DOMAIN
+        
+        更多敏感实体还在持续增加中
+      operationId: DeidenitfyContent
+      requestBody:
+        description: |
+          # 1. 请求JSON格式说明
+          敏感数据识别的JSON请求体，JSON请求的对象请参考DeidentifyContentRequest定义，一个DeidentifyContentRequest对象中可包含以下子JSON对象：
+          * **inspect_config**，该对象指定了识别的配置信息（与识别接口的参数相同）。可以配置的信息有：
+            * entities， 指定实体识别的列表，为空时系统会使用所有内置的实体进行识别。仅指定Entity的name即可，包含PERSON和LOCATION的实体列表示例如下：
+              ```
+              [
+                {"name": "PERSON"}
+                {"name": "LOCATION"}
+              ]
+              ```
+            * min_likelihood，Likelihood的枚举类型，标识识别的最小精度，默认值: LIKELIHOOD_UNSPECIFIED。只有当识别精度大于等于min_likelihood，才会在识别结果中返回。Likelihood的枚举值参考如下：
+              ```
+              - LIKELIHOOD_UNSPECIFIED: 未指定
+              - VERY_UNLIKELY: 非常不相似
+              - UNLIKELY: 较不相似
+              - POSSIBLE: 可能相似
+              - LIKELY: 较相似
+              - VERY_LIKELY: 非常相似
+              ```
+            * exclude_entities，该选项与entities配合使用，当为真时，对除了entities中其他所有的敏感实体进行识别。默认为**false**。
+            * custom_entities, 用户可自定义敏感实体和识别规则。custom_entites可与entities并存。当同时指定时，系统会首先使用entities中指定的实体进行识别，再次使用用户自定义的custom_entities进行识别。custom_entities中是包含了CustomEntity对象的数组。
+              #### **每个CustomEntity对象包括以下**：
+              * entity，Entity类型，标识自定义实体对象的名称和描述
+              * likelihood，使用regex或dictionary识别后的初始精度值
+              * regex或者dictionary，为CustomEntity指定一种识别规则，可以为regex或者dicionary，二选一。
+                * regex，使用正则表达式规则进行识别。regex可以指定pattern和大小写敏感等选项，例如：
+                  ```
+                  {
+                    "pattern": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,6}",
+                    "case_insensitive": false
+                  }
+                  ```
+                * dictionary，使用字典规则进行识别，指定字典的单词或短语的列表，例如包含城市的字典定义如下：
+                  ```
+                  {
+                    "word_list": {
+                      "words": [
+                        "北京",
+                        "台北",
+                        "香港"
+                      ]
+                    }
+                  }
+                  ```
+              * detection_rules，此为CustomEntity的高级选项。每个CustomEntity可以配置二次识别的规则，对CustomEntity的regex或dictionary识别结果进行动态精度调整。
+                * 例如：对内容"V1.3.0.1"识别时，其中“1.3.0.1”被识别成IP地址，根据上下文此标识为版本号，可对识别成IP实体的Likelyhood进行动态调节LikelihoodAdjustment，降低其初次识别精度。
+                * 例如：对内容"IP 1.3.0.1"识别时，其中“1.3.0.1”被识别成IP地址，根据上下文此标识为IP，可对识别成IP实体的Likelyhood进行动态调节LikelihoodAdjustment，增大其初次识别精度detection_rule是包含DetectionRule对象的数组。
+                
+                DetectionRule的对象中包含HotwordRule子对象，由HotwordRule进行二次识别，HotwordRule对象定义如下：
+                * hotword_regex，二次识别的正则表达式对象
+                * proximity，二次识别的上下文范围。其定义如下：
+                  ```
+                  "proximity": {
+                    "window_before": 10,
+                    "window_after": 10
+                  }
+                  ```
+                  其中，window_before是向前查找的字符个数，window_after是向后查找的字符个数。
+                * likelihood_adjustment，hotword_regex成功匹配后，对CustomEntity的likelihood进行调节。调节的值分为两种：
+                  * 使用固定的fixed_likelihood值覆盖初始的likelihood值
+                  * 使用浮动的relative_likelihood值与初始的likelihood值进行加法运算。如：relative_likelihood为1，初始的likelihood为POSSIBLE，相加后为POSSIBE+1=LIKELY
+                
+                detection_rules示例，在识别结果的前后上下文向前10个字符，向后10个字符搜索"ip"的特征，如果匹配成功则将likelihood值加2，如下：
+                ```
+                [
+                  {
+                    "hotword_rule": {
+                      "hotword_regex": {
+                        "pattern": "ip",
+                        "case_insensitive": true
+                      },
+                      "proximity": {
+                        "window_before": 10,
+                        "window_after": 10
+                      },
+                      "likelihood_adjustment": {
+                        "relative_likelihood": 2
+                      }
+                    }
+                  }
+                ]
+                ```
+              *更多有关CustomEntity的定义请参考CustomEntity的定义*。
+            * ### 以下为inspect_config的更多高级选项：
+            * limits，识别结果大小的限制，可参考FindingLimits对象定义*（可选）*
+          ---
+          * **deidentify_config**，指定脱敏适用的算法，可以为以下其中的一种：
+            * entity_transformations，实体脱敏算法，包含一个transformations的数组，该数组每个元素为EntityTransformation对象，可对不同实体应用不同的脱敏算法。EntityTransformation对象包括：
+              * entities，指定了哪些实体可应用primitive_transformation算法。当entities未指定或为空值，表示对所有实体均可使用primitive_transformation的算法配置脱敏
+              * primitive_transformation，PrimitiveTransformation类型对象。该对象是一个Union的对象，可以是以下脱敏算法的一种：
+                * replace_config，  ReplaceValueConfig类型对象，表示敏感数据完全替换算法。使用new_value对象标识新值，new_value为Value类型对象，Value对象是一个Union类型对象，该对象可标识string、int32、int64、boolean、date等多个类型，具体请参考Value的定义。示例：
+                  ```
+                  {
+                    "replace_config": {
+                      "new_value": {
+                        "string_value": "替换后的值"
+                      }
+                    }
+                  }
+                  ```
+                * redact_config，RedactConfig类型对象，表示敏感数据擦除算法。示例
+                  ```
+                  {
+                    "redact_config": {}
+                  }
+                  ```
+                * character_mask_config，CharacterMaskConfig类型对象，表示敏感数据部分遮掩算法。CharacterMaskConfig类型对象包括以下字段：
+                  * masking_character, string类型，遮掩的字母，不能为空，默认值为‘*’。取masking_character值的第一个字母，例如：如指定值为"#$"则只有第一个字母'#'有效。
+                  * number_to_mask，int类型，遮掩的长度。遮盖的字母个数，大于0表示需要遮盖的长度，小于0表示不遮盖的长度。例如：number_to_mask为-1时，对“abcd”脱敏后为“a***”
+                  * offset，boolean类型。开始遮掩偏移，默认为0
+                  * reverse_order，boolean类型。当为真时，从后往前查找并遮掩，否则从前往后查找并遮掩
+                  * characters_to_ignore，CharsToIgnore类型对象。表示在遮掩过程忽略哪些字母不进行遮掩，例如：555-555-5555忽略'-'，则脱敏后变为***-*55-5555，其中‘-’不会被替换成‘*’。
+                    CharsToIgnore类型的定义如下：
+                    * characters_to_skip，自定义的字母集，例如“$*^”，则遮掩时将跳过“$*^”三个字母中的任何一个。
+                    * common_characters_to_ignore，系统预定义的字母集。系统预定义的字母集包括：
+                      * NUMERIC: 忽略数字0-9
+                      * ALPHA_UPPER_CASE: 忽略大写字母A-Z
+                      * ALPHA_LOWER_CASE: 忽略小写字母a-z
+                      * PUNCTUATION: 忽略标点符号包括：!"#$%&’()*+,-./:;<=>?@[]^_`{|}~
+                      * WHITESPACE: 忽略空格等包括：\t\n\x0B\f\r
+                  
+                  示例：
+                  ```
+                  {
+                    "character_mask_config": {
+                      "masking_character": "*",
+                      "number_to_mask": 4,
+                      "offset": 0,
+                      "reverse_order": true,
+                      "characters_to_ignore": [
+                        {
+                          "characters_to_skip": "#"
+                        }
+                      ]
+                    }
+                  }
+                  ```
+                * crypto_replace_ffx_fpe_config，CryptoReplaceFfxFpeConfig类型对象，表示格式保全加密。CryptoReplaceFfxFpeConfig对象包含以下字段：
+                  * crypto_key，CryptoKey类型对象，加密使用的key。当前仅支持使用明文的unwrapped的key进行加密。具体请参考CryptoKey类型定义。
+                  * context，在结构化table中对指定列进行加密时，可通过指定其它列进行混淆增加加密强度，目前该功能尚未实现，请忽略该字段。
+                  * FFX加密使用的字母集，必须是以下三种之一：
+                    * common_alphabet，系统预定义的字母集，包括：
+                      * NUMERIC, 10进制符号集[0-9]
+                      * HEXADECIMAL，16进制符号集[0-9A-F]
+                      * UPPER_CASE_ALPHA_NUMERIC，36进制符号集[0-9A-Z]
+                      * ALPHA_NUMERIC，62进制符号集[0-9A-Za-z]
+                    * custom_alphabet，string类型。自定义字母集必须是[0-10A-Za-z]的子集，且至少不少于2个字符。
+                    * radix，int类型。自定义长度的字母集，截取[0-10A-Za-z]字母集中前radix个元素，且长度不低于2。
+                  * surrogate_entity，Entity类型，加密后的前缀标识，使用在加密中。该功能尚未支持，请忽略该字段。
+                  
+                  示例：
+                  ```
+                  {
+                    "crypto_replace_ffx_fpe_config": {
+                      "crypto_key": {
+                        "unwrapped": {
+                          "key": "加密key的base64编码"
+                        }
+                      }
+                      "common_alphabet": "NUMERIC",
+                      "surrogate_entity": {
+                        "name": "CARD_NUMBER_FFX",
+                      }
+                    }
+                  }
+                  ```
+                * fixed_size_bucketing_config，FixedSizeBucketingConfig类型对象，固定区间的数值泛化算法。FixedSizeBucketingConfig类型对象包含以下字段：
+                  * lower_bound，最小值
+                  * upper_bound，最大值
+                  * bucket_size，区间大小
+                  
+                  例如：设置lower_bound为10，upper_bound为69，bucket_size为20，则有以下5种范围 -10，10-30，30-50，50-69，69+。则数值24则被脱敏成为10-30，数值82脱敏后变为69+。
+                  ```
+                  {
+                    "fixed_size_bucketing_config": {
+                      "lower_bound": {
+                        "integer_value": "10"
+                      },
+                      "upper_bound": {
+                        "integer_value": "69"
+                      },
+                      "bucket_size": 20
+                    }
+                  }
+                  ```
+                * bucketing_config，BucketingConfig类型对象，通用泛化算法。BucketingConfig类型对象包含buckets，可以指定多个BucketingConfigBucket对象，每个对象包含字段：
+                  * min，Value类型
+                  * max，Value类型
+                  * replacement_value，Value类型
+                  
+                  示例：
+                  ```
+                  {
+                    "bucketing_config": {
+                      "buckets": [
+                        {
+                          "min": {
+                            "integer_value": 10
+                          },
+                          "max": {
+                            "integer_value": 50
+                          }
+                          "replacement_value": {
+                            "string_value": "<50"  
+                          }
+                        },
+                        {
+                          "min": {
+                            "integer_value": 50
+                          },
+                          "max": {
+                            "integer_value": 200
+                          }
+                          "replacement_value": {
+                            "string_value": "<200"  
+                          }
+                        }
+                      ]
+                    }
+                  }
+                  ```
+                * replace_with_entity_config，ReplaceWithEntityConfig类型对象，敏感实体名称替换算法。例如，“我是王中华”，脱敏后变为“我是[PERSON]”。
+                  ```
+                  {
+                    "replace_with_entity_config": {}
+                  }
+                  ```
+                * time_part_config，TimePartConfig类型对象，时间泛化算法。_**该功能尚未支持**_
+                * crypto_hash_config，CryptoHashConfig类型对象，对称加密算法。_**该功能尚未支持**_
+                * date_shift_config，DateShiftConfig类型对象，时间偏移混淆算法。_**该功能尚未支持**_
+            
+              > entity_transformations的完整示例：包含人名或者地址的进行脱敏，不包含则不进行脱敏
+              
+              ```
+              "entity_transformations": {
+                "entities": [
+                  {"name": "PERSON"},
+                  {"name": "LOCATION"}
+                ],
+                "primitive_transformation": {
+                  "character_mask_config": {
+                    "masking_character": "#",
+                    "number_to_mask": 2,
+                    "offset": 0,
+                    "reverse_order": true,
+                    "characters_to_ignore": [
+                      {
+                        "common_characters_to_ignore": "PUNCTUATION"
+                      }
+                    ]
+                  }
+                }
+              }
+              ```
+            ---
+            * record_transformations，RecordTransformations类型对象，结构化数据的脱敏算法。RecordTransformations类型对象中包含field_transformations，可包含多个FieldTransformation的对象，可对不同字段进行脱敏。
+              ```
+              {
+                "record_transformations": {
+                  "field_transformations": [
+                    object(FieldTransformation)
+                  ]
+                }
+              }
+              ```
+              FieldTransformation对象的定义如下：
+              * fields，指定对哪些字段进行脱敏。例如，指定NAME和LOCATION两列可表示如下：
+                ```
+                {
+                  "fields": [
+                    {
+                      "name": "NAME"
+                    },
+                    {
+                      "name": "LOCATION"
+                    }
+                  ]
+                }
+                ```
+              * condition，该字段预留字段。请忽略该字段。
+              * 脱敏算法，必须是以下二者之一：
+                * primitive_transformation，请参考PrimitiveTransformation类型对象。
+                  ```
+                  {
+                    "primitive_transformation": {
+                      ...
+                    }
+                  }
+                  ```
+                * entity_transformations，是对primitive_transformation的扩展，可指定entity的筛选条件。
+                  ```
+                  {
+                    "transformations": [
+                      {
+                        "entities": [
+                          {"name": "ENTITY_A"}
+                          {"name": "ENTITY_B"}
+                        ]
+                        "primitive_transformation": {
+                          ...
+                        }
+                      },
+                      {
+                        "entities": [
+                          {"name": "ENTITY_C"}
+                        ],
+                        "primitive_transformation": {
+                          ...
+                        }
+                      }
+                    ]
+                  }
+                  ```
+                  
+              > record_transformations的完整示例
+              
+                * 对“NAME”列的所有值进行脱敏
+                * 对“LOCATION”列中包含人名或者地址的行值进行脱敏，不包含则不进行脱敏
+                
+              ```
+              {
+                "record_transformations": {
+                  "field_transformations": [
+                    {
+                      "fields": [
+                        {
+                          "name": "NAME"
+                        }
+                      ],
+                      "primitive_transformation": {
+                        "character_mask_config": {
+                          "masking_character": "*",
+                          "number_to_mask": 5,
+                          "offset": 0,
+                          "reverse_order": true,
+                          "characters_to_ignore": [
+                            {
+                              "characters_to_skip": "$#(*"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "fields": [
+                        {
+                          "name": "LOCATION"
+                        }
+                      ],
+                      "entity_transformations": {
+                        "entities": [
+                          {"name": "PERSON"},
+                          {"name": "LOCATION"}
+                        ],
+                        "primitive_transformation": {
+                          "character_mask_config": {
+                            "masking_character": "#",
+                            "number_to_mask": 2,
+                            "offset": 0,
+                            "reverse_order": true,
+                            "characters_to_ignore": [
+                              {
+                                "common_characters_to_ignore": "PUNCTUATION"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }             
+              }
+              ```
+              
+          ---
+          * **item**，类型为ContentItem，该对象指定了待识别的内容，必须是以下三种类型的一种：
+            * value，string类型。
+            * table，Table类型，请参考Table对象。
+            * byte_item，ByteContentItem类型字节流。例如从文件中读取的字节流。
+          ---
+          * **inspect_rule_name**，指定的inspect规则[该选项尚未支持]，本版本中无须指定。说明：用户可以事先将inspect_config存储为inspect_rule对象，调用该接口时可以指定inspect_rule_name来加载之前存储的inspect_config对象而无需每次都指定inspect_config，当inspect_config和inspect_rule_name同时指定的，系统会merge两个对象的配置，当两个对象存在相同的设置时以inspect_config优先。
+          ---
+          * **deidentify_rule_name**，指定的deidentify规则[该选项尚未支持]，本版本中无须指定。说明：用户可以事先将deidentify_config存储为deidentify_rule对象，调用该接口时可以指定deidentify_rule_name来加载之前存储的deidentify_config对象而无需每次都指定deientify_config，当deidentify_config和deidentify_rule_name同时指定的，系统会merge两个对象的配置，当两个对象存在相同的设置时以identify_config优先。          
+          ## 2. 请求JSON实例说明
+          > 示例1：使用系统内置敏感实体进行识别与脱敏。该示例对指定的内容value进行PERSON和LOCATION识别
+          ```
+          {
+            "inspect_config": {
+              # 指定了对PERSON和LOCATION进行识别，当entities为空时
+              # 将使用系统内置的敏感实体进行识别
+              "entities": [
+                {"name": "PERSON"}, 
+                {"name": "LOCATION"}
+              ]
+            
+              # 指定了识别的精度必须是POSSIBLE及以上
+              "min_likelihood": "POSSIBLE",
+            },
+            "deidentify_config": {
+              "entity_transformations": {
+                "primitive_transformation": {
+                  "character_mask_config": {
+                    "masking_character": "#",
+                    "number_to_mask": 2,
+                    "offset": 0,
+                    "reverse_order": true,
+                    "characters_to_ignore": [
+                      {
+                        "common_characters_to_ignore": "PUNCTUATION"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+            
+            # 指定了待识别的内容
+            "item": {
+              "value": "我叫王中华，家住北京市朝阳区"
+            }
+          }
+          ```
+          ---
+          > 示例2：使用用户自定义的CustomEntity对Table进行识别与脱敏
+          ```
+          {
+            "inspect_config": {
+              # 指定了对PERSON和LOCATION进行识别，当entities为空时
+              # 将使用系统内置的敏感实体进行识别
+              "entities": [
+                {"name": "PERSON"}, 
+                {"name": "LOCATION"}
+              ]，
+              "custom_entities": [
+                {
+                  "entity": {
+                    "name": "CUSTOM_NAME"
+                  },
+                  "likelihood": "POSSIBLE",
+                  "regex": {
+                    "pattern": "(Tom|Tony)"
+                    "case_insensitive": true
+                  },
+                  "detection_rules": [
+                    {
+                      "hotword_rule": {
+                        "hotword_regex": {
+                          "pattern": "name",
+                          "case_insensitive": true
+                        },
+                        "proximity": {
+                          "window_before": 10,
+                          "window_after": 10
+                        },
+                        "likelihood_adjustment": {
+                          "relative_likelihood": 2
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+              # 指定了识别的精度必须是POSSIBLE及以上
+              "min_likelihood": "POSSIBLE",
+            },
+            
+            "deidentify_config": {
+              "record_transformations": {
+                "field_transformations": [
+                  {
+                    "fields": [
+                      {
+                        "name": "NAME"
+                      }
+                    ],
+                    "primitive_transformation": {
+                      "character_mask_config": {
+                        "masking_character": "*",
+                        "number_to_mask": 5,
+                        "offset": 0,
+                        "reverse_order": true,
+                        "characters_to_ignore": [
+                          {
+                            "characters_to_skip": "$#(*"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "fields": [
+                      {
+                        "name": "LOCATION"
+                      }
+                    ],
+                    "entity_transformations": {
+                      "entities": [
+                        {"name": "PERSON"},
+                        {"name": "LOCATION"}
+                      ],
+                      "primitive_transformation": {
+                        "character_mask_config": {
+                          "masking_character": "#",
+                          "number_to_mask": 2,
+                          "offset": 0,
+                          "reverse_order": true,
+                          "characters_to_ignore": [
+                            {
+                              "common_characters_to_ignore": "PUNCTUATION"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                ]
+              } 
+            }
+            
+            # 指定了待识别的内容
+            "item": {
+              "table": {
+                "headers": [
+                  {"name": "ID"},
+                  {"name": "NAME"},
+                  {"name": "LOCATION"}
+                ],
+                "rows": [
+                  {
+                    "values": [
+                      "string_value": "0001", 
+                      "string_value": "Jim", 
+                      "string_value": "NewYork"]
+                  },
+                  {
+                    "values": [
+                      "string_value": "0002", 
+                      "string_value": "Tom", 
+                      "string_value": "Beijing"]
+                  }
+                ]
+              }
+            }
+          }
+          ```
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeidentifyContentRequest'
+            example:
+              inspect_config: {
+                "entities": [
+                  {"name": "PERSON"}, 
+                  {"name": "LOCATION"}
+                ],
+                "min_likelihood": "POSSIBLE",
+              }
+              deidentify_config: {
+                "entity_transformations": {
+                  "primitive_transformation": {
+                    "character_mask_config": {
+                      "masking_character": "#",
+                      "number_to_mask": 2,
+                      "offset": 0,
+                      "reverse_order": true,
+                      "characters_to_ignore": [
+                        {
+                          "common_characters_to_ignore": "PUNCTUATION"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+              item: {
+                "value": "我叫王中华，家住北京市朝阳区"
+              }
+      responses:
+        '200':
+          description: |
+            # 1. 应答JSON格式说明
+            敏感数据识别和脱敏的JSON应答体，JSON对象请参考DeidentifyContentResponse定义，一个DeidentifyContentResponse对象中可包含以下子JSON对象：
+            * status，包含应答的状态码和消息。
+            ---
+            * item, ContentItem类型，表示脱敏后返回后的完整数据。
+            ---
+            * deidentify_result，类型DeidentifyResult。result中包含一个Finding对象的数组，以及FieldResult对象的数组（只在数据格式为table的时候才会有效）。
+              ```
+              {
+                "findings": [object(Finding)],
+                "field_results": [object(FieldResult)]
+              }
+              ```
+              * Finding对象的定义请参考识别接口的说明。
+              * FieldResult对象定义了结构化数据表table的详细脱敏信息。包括：
+                * quote，string类型。表示table[loc.col_index][loc.row_index]的原始数据。
+                * redacted，string类型，表示脱敏后的数据。
+                * record_location，RecordLocation类型，表示该值在table中的位置。
+            
+            ## 2. 应答JSON实例说明
+            > 示例1：使用系统内置敏感实体进行识别。该示例对指定的内容value进行PERSON和LOCATION识别的结果如下：
+            ```
+            {
+              "status": {
+                "code": "OK",
+                "msg": "成功"
+              },
+              "item": {
+                "value": "我是***，家住******"
+              }
+              "deidentify_result": {
+                "findings": [
+                  {
+                    "quote": "王中华",
+                    "entity": {
+                      "name": "PERSON"
+                    },
+                    "likelihood": "POSSIBLE",
+                    "location": {
+                      "byte_range": {
+                        "start": 2,
+                        "end": 5
+                      }
+                    },
+                    "create_time": "2018-12-02T09:35:30.495Z",
+                  },
+                  {
+                    "quote": "北京市朝阳区",
+                    "entity": {
+                      "name": "LOCATION"
+                    },
+                    "likelihood": "POSSIBLE",
+                    "location": {
+                      "byte_range": {
+                        "start": 8,
+                        "end": 14
+                      }
+                    },
+                    "create_time": "2018-12-02T09:35:30.495Z",
+                  }
+                ]
+              }
+            }
+            ```
+            ---
+            > 示例2：使用用户自定义的CustomEntity对Table进行识别的结果
+            ```
+            {
+              "status": {
+                "code": "OK",
+                "msg": "成功"
+              },
+              "item": {
+                "table": {
+                  "headers": [
+                    {"name": "ID"},
+                    {"name": "NAME"},
+                    {"name": "LOCATION"}
+                  ],
+                  "rows": [
+                    {
+                      "values": [
+                        "string_value": "0001", 
+                        "string_value": "Jim", 
+                        "string_value": "NewYork"]
+                    },
+                    {
+                      "values": [
+                        "string_value": "0002", 
+                        "string_value": "***", 
+                        "string_value": "Beijing"]
+                    }
+                  ]
+                }
+              }
+              "deidentify_result": {
+                "findings": [
+                  {
+                    "quote": "Tom",
+                    "entity": {
+                      "name": "CUSTOM_NAME"
+                    },
+                    "likelihood": "POSSIBLE",
+                    "location": {
+                      "byte_range": {
+                        "start": 0,
+                        "end": 3
+                      },
+                      "codepoint_range": {
+                        "start": 0,
+                        "end": 3
+                      },
+                      "content_location": {
+                        "record_location": {
+                          "field_id": {
+                            "name": "NAME"
+                          },
+                          "col_index": 1,
+                          "row_index": 1
+                        }
+                      }
+                    },
+                    "create_time": "2018-12-02T09:35:30.495Z",
+                  }
+                ]
+              }
+            }
+            ```
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeidentifyContentResponse'
+  /api/v1/image:redact:
+    post:
+      tags:
+        - Image
+      summary: 对给定的图片进行脱敏
+      description: |
+        对给定的图片进行敏感数据发现，并对敏感数据部分进行打马赛克处理。如医学影像图片中的人名、出生年月等。
+      operationId: RedactImage
+      requestBody:
+        description: |
+          # 1. 请求JSON格式说明
+          敏感数据识别的JSON请求体，JSON请求的对象请参考RedactImageRequest定义，一个RedactImageRequest对象中可包含以下子JSON对象：
+          * inspect_config，该对象指定了识别的配置信息。可以配置的信息有：
+            * entities， 指定实体识别的列表，为空时系统会使用所有内置的实体进行识别。仅指定Entity的name即可，包含PERSON和LOCATION的实体列表示例如下：
+              ```
+              [
+                {"name": "PERSON"}
+                {"name": "LOCATION"}
+              ]
+              ```
+            * min_likelihood，Likelihood的枚举类型，标识识别的最小精度，默认值: LIKELIHOOD_UNSPECIFIED。只有当识别精度大于等于min_likelihood，才会在识别结果中返回。Likelihood的枚举值参考如下：
+              ```
+              - LIKELIHOOD_UNSPECIFIED: 未指定
+              - VERY_UNLIKELY: 非常不相似
+              - UNLIKELY: 较不相似
+              - POSSIBLE: 可能相似
+              - LIKELY: 较相似
+              - VERY_LIKELY: 非常相似
+              ```
+            * exclude_entities，该选项与entities配合使用，当为真时，对除了entities中其他所有的敏感实体进行识别。默认为**false**。
+            * custom_entities, 用户可自定义敏感实体和识别规则。custom_entites可与entities并存。当同时指定时，系统会首先使用entities中指定的实体进行识别，再次使用用户自定义的custom_entities进行识别。custom_entities中是包含了CustomEntity对象的数组。
+              #### **每个CustomEntity对象包括以下**：
+              * entity，Entity类型，标识自定义实体对象的名称和描述
+              * likelihood，使用regex或dictionary识别后的初始精度值
+              * regex或者dictionary，为CustomEntity指定一种识别规则，可以为regex或者dicionary，二选一。
+                * regex，使用正则表达式规则进行识别。regex可以指定pattern和大小写敏感等选项，例如：
+                  ```
+                  {
+                    "pattern": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,6}",
+                    "case_insensitive": false
+                  }
+                  ```
+                * dictionary，使用字典规则进行识别，指定字典的单词或短语的列表，例如包含城市的字典定义如下：
+                  ```
+                  {
+                    "word_list": {
+                      "words": [
+                        "北京",
+                        "台北",
+                        "香港"
+                      ]
+                    }
+                  }
+                  ```
+              * detection_rules，此为CustomEntity的高级选项。每个CustomEntity可以配置二次识别的规则，对CustomEntity的regex或dictionary识别结果进行动态精度调整。
+                * 例如：对内容"V1.3.0.1"识别时，其中“1.3.0.1”被识别成IP地址，根据上下文此标识为版本号，可对识别成IP实体的Likelyhood进行动态调节LikelihoodAdjustment，降低其初次识别精度。
+                * 例如：对内容"IP 1.3.0.1"识别时，其中“1.3.0.1”被识别成IP地址，根据上下文此标识为IP，可对识别成IP实体的Likelyhood进行动态调节LikelihoodAdjustment，增大其初次识别精度detection_rule是包含DetectionRule对象的数组。
+                
+                DetectionRule的对象中包含HotwordRule子对象，由HotwordRule进行二次识别，HotwordRule对象定义如下：
+                * hotword_regex，二次识别的正则表达式对象
+                * proximity，二次识别的上下文范围。其定义如下：
+                  ```
+                  "proximity": {
+                    "window_before": 10,
+                    "window_after": 10
+                  }
+                  ```
+                  其中，window_before是向前查找的字符个数，window_after是向后查找的字符个数。
+                * likelihood_adjustment，hotword_regex成功匹配后，对CustomEntity的likelihood进行调节。调节的值分为两种：
+                  * 使用固定的fixed_likelihood值覆盖初始的likelihood值
+                  * 使用浮动的relative_likelihood值与初始的likelihood值进行加法运算。如：relative_likelihood为1，初始的likelihood为POSSIBLE，相加后为POSSIBE+1=LIKELY
+                
+                detection_rules示例，在识别结果的前后上下文向前10个字符，向后10个字符搜索"ip"的特征，如果匹配成功则将likelihood值加2，如下：
+                ```
+                [
+                  {
+                    "hotword_rule": {
+                      "hotword_regex": {
+                        "pattern": "ip",
+                        "case_insensitive": true
+                      },
+                      "proximity": {
+                        "window_before": 10,
+                        "window_after": 10
+                      },
+                      "likelihood_adjustment": {
+                        "relative_likelihood": 2
+                      }
+                    }
+                  }
+                ]
+                ```
+              *更多有关CustomEntity的定义请参考CustomEntity的定义*。
+            * ### 以下为inspect_config的更多高级选项：
+            * limits，识别结果大小的限制，可参考FindingLimits对象定义*（可选）*
+          ---
+          * image_redaction_config，类型为ImageRedactionConfig，表示图片脱敏的规则。ImageRedactionConfig对象中可包含多个EntityConfig子对象，每个EntityConfig定义各个实体的图片遮罩使用的颜色。
+            ```
+            {
+              "entity_configs": [
+                object(EntityConfig)
+              ]
+            }
+            ```
+            
+            EntityConfig对象的定义如下：
+            * 目标实体，必须是以下二者之一：
+              * entity，Entity类型。表示对指定的实体进行redaction_color颜色遮罩
+              * 或者redact_all_text，boolean类型。表示对所有的实体进行遮罩。
+            * redaction_color，Color对象。代表目标实体遮罩的颜色。Color对象请参考Color定义。
+          ---
+          * byte_item，类型为ByteContentItem，该对象指定了待识别的内容。ByteContentItem的定义如下：
+            * type， BytesType枚举类型。必须指定图片的类型，支持的图片类型包括：
+              * IMAGE_JPEG
+              * IMAGE_BMP
+              * IMAGE_PNG
+              * IMAGE_SVG
+            * data，bytes类型。必须指定为图片二进制流的base64编码。
+          ---
+          * inspect_rule_name，指定的inspect规则[该选项尚未支持]，本版本中无须指定。说明：用户可以事先将inspect_config存储为inspect_rule对象，调用该接口时可以指定inspect_rule_name来加载之前存储的inspect_config对象而无需每次都指定inspect_config，当inspect_config和inspect_rule_name同时指定的，系统会merge两个对象的配置，当两个对象存在相同的设置时以inspect_config优先。
+          
+          ## 2. 请求JSON实例说明
+          ---
+          > 示例1：使用系统支持的所有敏感实体进行图片中的敏感数据识别并打马赛克
+          ```
+          {
+            "inspect_config": {
+              # 将使用系统内置的敏感实体进行识别
+              "entities": []，
+              # 指定了识别的精度必须是POSSIBLE及以上
+              "min_likelihood": "POSSIBLE",
+            },
+            
+            # 对PERSON使用蓝色遮罩
+            # 对LOCATION使用绿色遮罩
+            "image_redaction_config": {
+              "entity_configs": [
+                {
+                  "entity": {
+                    "name": "PERSON"
+                  },
+                  "redaction_color": {
+                    "red": 0,
+                    "green": 0,
+                    "blue": 255
+                  }
+                },
+                {
+                  "entity": {
+                    "name": "LOCATION"
+                  },
+                  "redaction_color": {
+                    "red": 0,
+                    "green": 255,
+                    "blue": 0
+                  }
+                }
+              ]
+            }
+            
+            # 指定了图片的格式与内容
+            "byte_item": {
+              "type": "IMAGE_JPEG",
+              "data": "此处为图片二进制数据的base64编码"
+            }
+          }
+          ```
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedactImageRequest'
+            example:
+              inspect_config: {
+                "entities": [],
+                "min_likelihood": "POSSIBLE"
+              }
+              image_redaction_config: {
+                "entity_configs": [
+                  {
+                    "entity": {
+                      "name": "PERSON"
+                    },
+                    "redaction_color": {
+                      "red": 0,
+                      "green": 0,
+                      "blue": 255
+                    }
+                  },
+                  {
+                    "entity": {
+                      "name": "LOCATION"
+                    },
+                    "redaction_color": {
+                      "red": 0,
+                      "green": 255,
+                      "blue": 0
+                    }
+                  }
+                ]
+              }
+              byte_item: {
+                "type": "IMAGE_JPEG",
+                "data": "此处为图片二进制数据的base64编码"
+              }
+      responses:
+        '200':
+          description: |
+            # 1. 应答JSON格式说明
+            敏感数据识别的JSON应答体，JSON对象请参考RedactImageResponse定义，一个RedactImageResponse对象中可包含以下子JSON对象：
+            * status，包含应答的状态码和消息。
+            ---
+            * redacted_image，bytes类型，表示遮罩脱敏后的图片字节流的base64编码。
+            ---
+            * inspect_result，类型InspectResult。inspect_result中包含一个findings的数组，该数组中的每个对象的类型为Finding。每个Finding对象均表示一个敏感信息内容，包括：原始数据内容、实体类别、精度、位置等信息。
+              ```
+              {
+                "findings": [Finding对象]
+              }
+              ```
+              Finding对象的定义如下：
+              * quote，string类型，敏感实体的原始内容
+              * entity，Entity类型，识别后的敏感实体类型
+              * likelihood，识别后的精度值
+              * location，识别的敏感信息在原始信息中的位置。location是以下位置的组合：
+                * byte_range，Range对象，标识敏感数据在字节位置[start, end]
+                * codepoint_range，Range对象，标识敏感数据在字符位置[start, end]
+                * content_location，ContentLocation对象。根据识别的数据的类型，在本接口中content_location表示为 image_location矩形位置。例如，敏感数据box位于左上角的矩形位置：
+                    ```
+                    {
+                      "bounding_boxes": [
+                        {
+                          "top": 10,
+                          "left": 30,
+                          "width": 100,
+                          "height": 100
+                        }
+                      ]
+                    }
+                    ```
+              * create_time，识别的时间
+              * redact_color，Color类型。表示该实体遮罩的颜色（该字段仅在图片遮罩接口中使用）。Color为rgb值，范围0-255，例如：
+                ```
+                {
+                  "red": 0,
+                  "green": 0,
+                  "blue": 0
+                }
+                ```
+            
+            ## 2. 应答JSON实例说明
+            > 示例1：使用系统支持的所有敏感实体进行图片中的敏感数据识别结果
+            ```
+            {
+              "status": {
+                "code": "OK",
+                "msg": "成功"
+              },
+              "redacted_image": "脱敏后的base64编码",
+              "inspect_result": {
+                "findings": [
+                  {
+                    "quote": "雷淑英",
+                    "entity": {
+                      "name": "PERSON"
+                    },
+                    "likelihood": "POSSIBLE",
+                    "location": {
+                      "byte_range": {
+                        "start": 0,
+                        "end": 3
+                      },
+                      "codepoint_range": {
+                        "start": 0,
+                        "end": 3
+                      },
+                      "content_location": {
+                        "image_location": {
+                          "bounding_boxes": [
+                            {
+                              "top": 10,
+                              "left": 30,
+                              "width": 100,
+                              "height": 100
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "create_time": "2018-12-02T09:35:30.495Z",
+                    "redact_color": {
+                      "red": 0,
+                      "green": 0,
+                      "blue": 255
+                    }
+                  }
+                ]
+              }
+            }
+            ```
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RedactImageResponse'
+components:
+  schemas:
+    BucketingConfigBucket:
+      type: object
+      properties:
+        min:
+          $ref: '#/components/schemas/Value'
+        max:
+          $ref: '#/components/schemas/Value'
+        replacement_value:
+          $ref: '#/components/schemas/Value'
+    ByteContentItemBytesType:
+      type: string
+      enum:
+        - BYTES_TYPE_UNSPECIFIED
+        - IMAGE
+        - IMAGE_JPEG
+        - IMAGE_BMP
+        - IMAGE_PNG
+        - IMAGE_SVG
+        - TEXT_UTF8
+        - DOCUMENT
+        - DOC_WORD
+        - DOC_PDF
+        - DOC_XLS
+      default: BYTES_TYPE_UNSPECIFIED
+      description: |-
+        识别内容的文件类型
+
+         - BYTES_TYPE_UNSPECIFIED: 未指定
+         - IMAGE: 通用的图片数据
+         - IMAGE_JPEG: JPEG格式文件
+         - IMAGE_BMP: BMP格式文件
+         - IMAGE_PNG: PNG格式文件
+         - IMAGE_SVG: SVG格式文件
+         - TEXT_UTF8: UTF-8编码的字符串
+         - DOCUMENT: 通用的文档数据
+         - DOC_WORD: WORD格式文件
+         - DOC_PDF: PDF格式文件
+         - DOC_XLS: EXCEL格式文件
+      title: BytesType
+    CharsToIgnoreCommonCharsToIgnore:
+      type: string
+      enum:
+        - COMMON_CHARS_TO_IGNORE_UNSPECIFIED
+        - NUMERIC
+        - ALPHA_UPPER_CASE
+        - ALPHA_LOWER_CASE
+        - PUNCTUATION
+        - WHITESPACE
+      default: COMMON_CHARS_TO_IGNORE_UNSPECIFIED
+      description: |-
+        忽略的字母
+
+         - NUMERIC: 忽略数字0-9
+         - ALPHA_UPPER_CASE: 忽略大写字母A-Z
+         - ALPHA_LOWER_CASE: 忽略小写字母a-z
+         - PUNCTUATION: 忽略标点符号包括：!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
+         - WHITESPACE: 忽略空格等包括：\t\n\x0B\f\r]
+      title: CommonCharsToIgnore
+    CryptoReplaceFfxFpeConfigFfxCommonNativeAlphabet:
+      type: string
+      enum:
+        - FFX_COMMON_NATIVE_ALPHABET_UNSPECIFIED
+        - NUMERIC
+        - HEXADECIMAL
+        - UPPER_CASE_ALPHA_NUMERIC
+        - ALPHA_NUMERIC
+      default: FFX_COMMON_NATIVE_ALPHABET_UNSPECIFIED
+      description: |-
+        格式保全加密的字母集
+
+         - NUMERIC: 10进制[0-9]
+         - HEXADECIMAL: 16进制[0-9A-F]
+         - UPPER_CASE_ALPHA_NUMERIC: 36进制[0-9A-Z]
+         - ALPHA_NUMERIC: 62进制[0-9A-Za-z]
+      title: FfxCommonNativeAlphabet
+    CustomEntityDetectionRule:
+      type: object
+      properties:
+        hotword_rule:
+          $ref: '#/components/schemas/DetectionRuleHotwordRule'
+      description: |-
+        识别规则的定义。对识别的结果前后上下文进行二次识别，二次识别后可对
+        初始识别的精度进行动态调节。例如：
+        例1：对内容".3.0.1"识别时，其中“1.3.0.1”被识别成IP地址，根据上下文此标识为版本号，可对识别成IP实体的Likelyhood进行
+        动态调节LikelihoodAdjustment，降低其初次识别精度。
+        例2：对内容"IP 1.3.0.1"识别时，其中“1.3.0.1”被识别成IP地址，根据上下文此标识为IP，可对识别成IP实体的Likelyhood进行
+        动态调节LikelihoodAdjustment，增大其初次识别精度。
+      title: DetectionRule
+    CustomEntityDictionary:
+      type: object
+      properties:
+        word_list:
+          $ref: '#/components/schemas/DictionaryWordList'
+      description: 字典定义
+      title: Dictionary
+    CustomEntityRegex:
+      type: object
+      properties:
+        pattern:
+          type: string
+          title: 特征
+        case_insensitive:
+          type: boolean
+          format: boolean
+          title: 大小写不敏感，默认为false
+      description: 正则表达式的定义
+      title: Regex
+    DeidentifyResultFieldResult:
+      type: object
+      properties:
+        quote:
+          type: string
+          title: 脱敏前的原文
+        redacted:
+          type: string
+          title: 脱敏后的密文
+        record_location:
+          $ref: '#/components/schemas/RecordLocation'
+      description: 数据中单个字段的脱敏结果信息
+      title: FieldResult
+    DetectionRuleHotwordRule:
+      type: object
+      properties:
+        hotword_regex:
+          $ref: '#/components/schemas/CustomEntityRegex'
+        proximity:
+          $ref: '#/components/schemas/DetectionRuleProximity'
+        likelihood_adjustment:
+          $ref: '#/components/schemas/DetectionRuleLikelihoodAdjustment'
+      description: 二次识别的规则定义
+      title: HotwordRule
+    DetectionRuleLikelihoodAdjustment:
+      type: object
+      properties:
+        fixed_likelihood:
+          $ref: '#/components/schemas/Likelihood'
+        relative_likelihood:
+          type: integer
+          format: int32
+          title: 浮动精度
+      description: |-
+        识别精度动态调整的定义。动态调整的精度必须是以下中的一种：
+        - fixed_likelihood，固定精度如POSSIBLE
+        - relative_likelihood，浮动精度值为[-5,5]的整数值，计算方式：初始精度+浮动精度，如POSSIBLE + 1 = LIKELY
+      title: LikelihoodAdjustment
+    DetectionRuleProximity:
+      type: object
+      properties:
+        window_before:
+          type: integer
+          format: int32
+          title: 向前识别的字符个数
+        window_after:
+          type: integer
+          format: int32
+          title: 向后识别的字符个数
+      description: 上下文范围的定义
+      title: Proximity
+    DictionaryWordList:
+      type: object
+      properties:
+        words:
+          type: array
+          items:
+            type: string
+          description: 单词、词语或短语，每个单词至少2个字符及以上
+          title: 单词数组
+      description: 字典中单词列表的定义
+      title: WordList
+    EntityTransformationsEntityTransformation:
+      type: object
+      properties:
+        entities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Entity'
+          title: 指定实体
+        primitive_transformation:
+          $ref: '#/components/schemas/PrimitiveTransformation'
+      description: 实体脱敏算法
+      title: EntityTransformation
+    ExpressionsLogicalOperator:
+      type: string
+      enum:
+        - LOGICAL_OPERATOR_UNSPECIFIED
+        - AND
+      default: LOGICAL_OPERATOR_UNSPECIFIED
+      description: |-
+        逻辑关系
+
+         - AND: 与关系
+      title: LogicalOperator
+    FindingLimitsEntityLimit:
+      type: object
+      properties:
+        entity:
+          $ref: '#/components/schemas/Entity'
+        max_findings:
+          type: integer
+          format: int32
+          title: 该实体最大能返回的识别结果个数
+      description: 单个实体结果集的限制
+      title: EntityLimit
+    InspectConfigFindingLimits:
+      type: object
+      properties:
+        max_findings_per_request:
+          type: integer
+          format: int32
+          title: 单次请求的识别结果集最大个数，默认最大1000
+        max_findings_per_entity:
+          type: array
+          items:
+            $ref: '#/components/schemas/FindingLimitsEntityLimit'
+          title: 限定每个实体识别结果返回的最大个数
+      description: 识别后的结果集大小限制
+      title: FindingLimits
+    RecordConditionCondition:
+      type: object
+      properties:
+        field:
+          $ref: '#/components/schemas/FieldId'
+        operator:
+          $ref: '#/components/schemas/RelationalOperator'
+        value:
+          $ref: '#/components/schemas/Value'
+      description: 脱敏条件判定
+      title: Condition
+    RecordConditionConditions:
+      type: object
+      properties:
+        conditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecordConditionCondition'
+      description: 条件列表
+      title: Conditions
+    RecordConditionExpressions:
+      type: object
+      properties:
+        logical_operator:
+          $ref: '#/components/schemas/ExpressionsLogicalOperator'
+        conditions:
+          $ref: '#/components/schemas/RecordConditionConditions'
+      description: 条件表达式
+      title: Expressions
+    RedactImageRequestEntityConfig:
+      type: object
+      properties:
+        entity:
+          $ref: '#/components/schemas/Entity'
+        redact_all_text:
+          type: boolean
+          format: boolean
+          title: 遮罩所有的敏感实体
+        redaction_color:
+          $ref: '#/components/schemas/Color'
+      description: 单个实体的遮罩设置
+      title: EntityConfig
+    RedactImageRequestImageRedactionConfig:
+      type: object
+      properties:
+        entity_configs:
+          type: array
+          items:
+            $ref: '#/components/schemas/RedactImageRequestEntityConfig'
+      description: 图片遮罩设置
+      title: ImageRedactionConfig
+    TableRow:
+      type: object
+      properties:
+        values:
+          type: array
+          items:
+            $ref: '#/components/schemas/Value'
+      description: 表的单行记录
+      title: Row
+    TimePartConfigTimePart:
+      type: string
+      enum:
+        - TIME_PART_UNSPECIFIED
+        - YEAR
+        - MONTH
+        - DAY_OF_MONTH
+        - DAY_OF_WEEK
+        - WEEK_OF_YEAR
+        - HOUR_OF_DAY
+      default: TIME_PART_UNSPECIFIED
+      description: |-
+        时间字段
+
+         - YEAR: 范围[0-9999]
+         - MONTH: 范围[1-12]
+         - DAY_OF_MONTH: 范围[1-31]
+         - DAY_OF_WEEK: 范围[1-7]
+         - WEEK_OF_YEAR: 范围[1-52]
+         - HOUR_OF_DAY: 范围[0-23]
+      title: TimePart
+    apiLocation:
+      type: object
+      properties:
+        byte_range:
+          $ref: '#/components/schemas/Range'
+          title: 位置偏移大小（字节为单位）
+        codepoint_range:
+          $ref: '#/components/schemas/Range'
+          title: 位置偏移大小（字符为单位）
+        content_location:
+          $ref: '#/components/schemas/ContentLocation'
+          title: 识别实体在数据表、图片或者文档中的位置信息
+      description: 识别结果的位置信息
+      title: Location
+    typeDate:
+      type: object
+      properties:
+        year:
+          type: integer
+          format: int32
+          description: 年[1-9999]
+        month:
+          type: integer
+          format: int32
+          description: 月[1-12]
+        day:
+          type: integer
+          format: int32
+          description: 日[1-31]
+      description: 日期
+    typeDayOfWeek:
+      type: string
+      enum:
+        - DAY_OF_WEEK_UNSPECIFIED
+        - MONDAY
+        - TUESDAY
+        - WEDNESDAY
+        - THURSDAY
+        - FRIDAY
+        - SATURDAY
+        - SUNDAY
+      default: DAY_OF_WEEK_UNSPECIFIED
+      description: |-
+        周天
+         - DAY_OF_WEEK_UNSPECIFIED: 未指定
+         - MONDAY: 星期一
+         - TUESDAY: 星期二
+         - WEDNESDAY: 星期三
+         - THURSDAY: 星期四
+         - FRIDAY: 星期五
+         - SATURDAY: 星期六
+         - SUNDAY: 星期日
+    typeTimeOfDay:
+      type: object
+      properties:
+        hours:
+          type: integer
+          format: int32
+          description: |-
+            时[00-24]
+        minutes:
+          type: integer
+          format: int32
+          description: 分[0-59]
+        seconds:
+          type: integer
+          format: int32
+          description: |-
+            秒[0-59]
+        nanos:
+          type: integer
+          format: int32
+          description: 纳秒[0 - 999,999,999]
+      description: |-
+        时间
+    BoundingBox:
+      type: object
+      properties:
+        top:
+          type: integer
+          format: int32
+          title: 距左上角TOP像素值
+        left:
+          type: integer
+          format: int32
+          title: 距左上角LEFT像素值
+        width:
+          type: integer
+          format: int32
+          title: 矩形的长度像素值
+        height:
+          type: integer
+          format: int32
+          title: 矩形的高度像素值
+      description: 矩形的位置偏移
+      title: BoundingBox
+    BucketingConfig:
+      type: object
+      properties:
+        buckets:
+          type: array
+          items:
+            $ref: '#/components/schemas/BucketingConfigBucket'
+      description: 脱敏算法：泛化后使用特定值来替换
+      title: BucketingConfig
+    ByteContentItem:
+      type: object
+      properties:
+        type:
+          $ref: '#/components/schemas/ByteContentItemBytesType'
+          description: 待识别内容的格式，默认TEXT_UTF8.
+        data:
+          type: string
+          format: byte
+          title: 字节流
+      description: 识别内容的字节流数据
+      title: ByteContentItem
+    CharacterMaskConfig:
+      type: object
+      properties:
+        masking_character:
+          type: string
+          title: 遮盖使用的字母，字符串序列默认字符串为“*”，数据序列默认使用“0”
+        number_to_mask:
+          type: integer
+          format: int32
+          title: |-
+            遮盖的字母个数，大于0表示需要遮盖的长度，小于0表示不遮盖的长度。
+            例如：number_to_mask=-1时，对“abcd”脱敏后为“a***”
+        offset:
+          type: integer
+          format: int32
+          title: 开始遮掩偏移，默认为0
+        reverse_order:
+          type: boolean
+          format: boolean
+          title: 当为真时，从后往前查找并遮掩，否则从前往后查找并遮掩
+        characters_to_ignore:
+          type: array
+          items:
+            $ref: '#/components/schemas/CharsToIgnore'
+          title: 忽略的字母，如：555-555-5555忽略`-`，则脱敏后变为***-*55-5555
+      description: 脱敏算法：敏感数据遮掩
+      title: CharacterMaskConfig
+    CharsToIgnore:
+      type: object
+      properties:
+        characters_to_skip:
+          type: string
+          title: 忽略的字母
+        common_characters_to_ignore:
+          $ref: '#/components/schemas/CharsToIgnoreCommonCharsToIgnore'
+      description: 敏感数据中替换时忽略的字母
+      title: CharsToIgnore
+    Color:
+      type: object
+      properties:
+        red:
+          type: integer
+          format: int32
+          title: 红色，范围0~255
+        green:
+          type: integer
+          format: int32
+          title: 绿色，范围0~255
+        blue:
+          type: integer
+          format: int32
+          title: 蓝色，范围0~255
+      description: 图片遮罩的颜色
+      title: Color
+    ContentItem:
+      type: object
+      properties:
+        value:
+          type: string
+          title: UTF-8字符串
+        table:
+          $ref: '#/components/schemas/Table'
+        byte_item:
+          $ref: '#/components/schemas/ByteContentItem'
+      description: 待识别的内容，格式是string、表、文件字节流三者之一
+      title: ContentItem
+    ContentLocation:
+      type: object
+      properties:
+        record_location:
+          $ref: '#/components/schemas/RecordLocation'
+        image_location:
+          $ref: '#/components/schemas/ImageLocation'
+        document_location:
+          $ref: '#/components/schemas/DocumentLocation'
+      description: 识别结果位置信息，必须是record_location、image_location、document_location三者中一个。
+      title: ContentLocation
+    ContentOption:
+      type: string
+      enum:
+        - CONTENT_UNSPECIFIED
+        - CONTENT_TEXT
+        - CONTENT_IMAGE
+      default: CONTENT_UNSPECIFIED
+      description: |-
+        内容类型
+
+         - CONTENT_TEXT: 文本
+         - CONTENT_IMAGE: 图片
+      title: ContentOption
+    CryptoHashConfig:
+      type: object
+      properties:
+        crypto_key:
+          $ref: '#/components/schemas/CryptoKey'
+      description: 脱敏算法：使用SHA-256进行hash运算
+      title: CryptoHashConfig
+    CryptoKey:
+      type: object
+      properties:
+        transient:
+          $ref: '#/components/schemas/TransientCryptoKey'
+        unwrapped:
+          $ref: '#/components/schemas/UnwrappedCryptoKey'
+        kms_wrapped:
+          $ref: '#/components/schemas/KmsWrappedCryptoKey'
+          title: 密文状态密钥
+      description: 加密使用的密钥
+      title: CryptoKey
+    CryptoReplaceFfxFpeConfig:
+      type: object
+      properties:
+        crypto_key:
+          $ref: '#/components/schemas/CryptoKey'
+          title: 加密Key，必填。
+        context:
+          $ref: '#/components/schemas/FieldId'
+          title: 用户混淆的列，提高加密的安全性。例如：相同的敏感数据需要其不同的context进行混淆后加密
+        common_alphabet:
+          $ref: '#/components/schemas/CryptoReplaceFfxFpeConfigFfxCommonNativeAlphabet'
+        custom_alphabet:
+          type: string
+          title: '自定义的加密结果的数字、字母集，长度必须为[2, 62]'
+        radix:
+          type: integer
+          format: int32
+          title: '加密结果的数字、字母集，大小范围为[2, 62]'
+        surrogate_entity:
+          $ref: '#/components/schemas/Entity'
+      description: 脱敏算法：格式保全加密，敏感数据必须是ASCII码，且是2个字符及以上。
+      title: CryptoReplaceFfxFpeConfig
+    CustomEntity:
+      type: object
+      properties:
+        entity:
+          $ref: '#/components/schemas/Entity'
+        likelihood:
+          $ref: '#/components/schemas/Likelihood'
+        dictionary:
+          $ref: '#/components/schemas/CustomEntityDictionary'
+        regex:
+          $ref: '#/components/schemas/CustomEntityRegex'
+        detection_rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomEntityDetectionRule'
+      description: |-
+        用户自定义的敏感数据实体定义，自定义实体的包括如下字段：
+        - 实体的基本定义entity（名称和描述），必填
+        - 实体的基线精度likelihood，必填
+        - 实体的识别规则包括正则表达式、字典，正则表达式或字典二选一，必填
+        - 实体的精度调节的detection_rules，，可选
+      title: CustomEntity
+    DateShiftConfig:
+      type: object
+      properties:
+        upper_bound_days:
+          type: integer
+          format: int32
+          title: |-
+            在lower_bound_days和upper_bound_days之间生成一个随机数进行day的偏移计算
+            正值则日期向后偏移，负值则日期向前偏移
+        lower_bound_days:
+          type: integer
+          format: int32
+        context:
+          $ref: '#/components/schemas/FieldId'
+        crypto_key:
+          $ref: '#/components/schemas/CryptoKey'
+      description: 日期偏移
+      title: DateShiftConfig
+    DeidentifyConfig:
+      type: object
+      properties:
+        entity_transformations:
+          $ref: '#/components/schemas/EntityTransformations'
+        record_transformations:
+          $ref: '#/components/schemas/RecordTransformations'
+      description: 敏感数据实体的脱敏算法配置
+      title: DeidentifyConfig
+    DeidentifyContentRequest:
+      type: object
+      properties:
+        inspect_config:
+          $ref: '#/components/schemas/InspectConfig'
+        deidentify_config:
+          $ref: '#/components/schemas/DeidentifyConfig'
+        item:
+          $ref: '#/components/schemas/ContentItem'
+        inspect_rule_name:
+          type: string
+          title: 识别规则，保留字段
+        deidentify_rule_name:
+          type: string
+          title: 脱敏规则，保留字段
+      description: 对待识别内容进行敏感数据识别和脱敏的请求
+      title: DeidentifyContentRequest
+    DeidentifyContentResponse:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/Status'
+        item:
+          $ref: '#/components/schemas/ContentItem'
+        deidentify_result:
+          $ref: '#/components/schemas/DeidentifyResult'
+      description: 对待识别内容进行敏感数据识别和脱敏的应答
+      title: DeidentifyContentResponse
+    DeidentifyResult:
+      type: object
+      properties:
+        findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Finding'
+          title: 识别结果的列表
+        field_results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeidentifyResultFieldResult'
+          title: 数据表的字段脱敏结果
+      description: 敏感数据脱敏后的结果概要信息
+      title: DeidentifyResult
+    DocumentLocation:
+      type: object
+      properties:
+        page_num:
+          type: integer
+          format: int32
+          title: 页码信息
+        file_offset:
+          type: string
+          format: int64
+          title: 字节偏移信息
+      description: 识别结果在文档中的位置信息
+      title: DocumentLocation
+    Entity:
+      type: object
+      properties:
+        name:
+          type: string
+          title: 名称
+        description:
+          type: string
+          title: 描述
+      description: 敏感数据实体的定义
+      title: Entity
+    EntityTransformations:
+      type: object
+      properties:
+        transformations:
+          type: array
+          items:
+            $ref: '#/components/schemas/EntityTransformationsEntityTransformation'
+          title: 实体脱敏算法列表
+      description: 敏感实体的脱敏算法
+      title: EntityTransformations
+    FieldId:
+      type: object
+      properties:
+        name:
+          type: string
+          title: 列名
+      description: 数据表的列名
+      title: FieldId
+    FieldTransformation:
+      type: object
+      properties:
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldId'
+          title: 字段列表
+        condition:
+          $ref: '#/components/schemas/RecordCondition'
+        primitive_transformation:
+          $ref: '#/components/schemas/PrimitiveTransformation'
+        entity_transformations:
+          $ref: '#/components/schemas/EntityTransformations'
+      description: 表字段的脱敏算法
+      title: FieldTransformation
+    Finding:
+      type: object
+      properties:
+        quote:
+          type: string
+          title: 识别后的实体内容引用
+        entity:
+          $ref: '#/components/schemas/Entity'
+        likelihood:
+          $ref: '#/components/schemas/Likelihood'
+        location:
+          $ref: '#/components/schemas/apiLocation'
+        create_time:
+          type: string
+          format: date-time
+          title: 识别的时间戳
+        deidentified:
+          type: boolean
+          format: boolean
+          title: 该finding是否进行了脱敏处理
+        deidentified_value:
+          type: string
+          title: 该finding脱敏后的内容（text）
+        redact_color:
+          $ref: '#/components/schemas/Color'
+      description: 单个敏感数据识别结果
+      title: Finding
+    FixedSizeBucketingConfig:
+      type: object
+      properties:
+        lower_bound:
+          $ref: '#/components/schemas/Value'
+        upper_bound:
+          $ref: '#/components/schemas/Value'
+        bucket_size:
+          type: number
+          format: double
+          title: |-
+            范围大小，如lower_bound为10，upper_bound为69，bucket_size为20，则有以下5种范围
+            -10，10-30，30-50，50-69，69+
+      description: 脱敏算法：泛化后使用数值范围来替换
+      title: FixedSizeBucketingConfig
+    ImageLocation:
+      type: object
+      properties:
+        bounding_boxes:
+          type: array
+          items:
+            $ref: '#/components/schemas/BoundingBox'
+          title: 矩形的位置偏移
+      description: 识别结果在图像中的位置信息
+      title: ImageLocation
+    InspectConfig:
+      type: object
+      properties:
+        entities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Entity'
+          title: |-
+            对指定的entities进行识别，entity必须是ListEntities返回中的entity
+            当请求中没有指定Entity或CustomEntity，系统将默认使用系统内置的实体进行识别
+        min_likelihood:
+          $ref: '#/components/schemas/Likelihood'
+          title: 识别精度过滤器，仅返回识别精度不低于min_likelihood的所有结果，默认为POSSIBLE
+        limits:
+          $ref: '#/components/schemas/InspectConfigFindingLimits'
+          title: 限定返回结果的个数
+        exclude_entities:
+          type: boolean
+          format: boolean
+          title: 当为true时则识别除指定entities之外所有实体，对CustomEntity无效
+        custom_entities:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomEntity'
+          title: 自定义实体
+        content_options:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContentOption'
+          title: 指定识别的内容类型，未指定时将识别所有支持的内容类型
+      description: |-
+        对待识别内容（如：字符串、表、文件、图片）进行敏感数据识别。当请求为脱敏时，只对该InspectConfig中
+        指定的Entity或CustomEntity进行脱敏
+      title: InspectConfig
+    InspectContentRequest:
+      type: object
+      properties:
+        inspect_config:
+          $ref: '#/components/schemas/InspectConfig'
+          title: 识别的配置
+        item:
+          $ref: '#/components/schemas/ContentItem'
+          title: 识别的原始内容
+        inspect_rule_name:
+          type: string
+          title: 识别规则，保留字段
+      description: 对待识别内容进行敏感数据识别请求
+    InspectContentResponse:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/Status'
+        result:
+          $ref: '#/components/schemas/InspectResult'
+      description: 识别的潜藏敏感数据结果
+    InspectResult:
+      type: object
+      properties:
+        findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Finding'
+          title: 识别结果的列表
+      description: 敏感数据识别的结果集
+      title: InspectResult
+    KmsWrappedCryptoKey:
+      type: object
+      properties:
+        wrapped_key:
+          type: string
+          format: byte
+          title: 加密后密钥的字节流
+        crypto_key_name:
+          type: string
+          title: 加密密钥的名称
+      description: 密文状态密钥
+      title: KmsWrappedCryptoKey
+    Likelihood:
+      type: string
+      enum:
+        - LIKELIHOOD_UNSPECIFIED
+        - VERY_UNLIKELY
+        - UNLIKELY
+        - POSSIBLE
+        - LIKELY
+        - VERY_LIKELY
+      default: LIKELIHOOD_UNSPECIFIED
+      description: |-
+        敏感实体识别精度
+
+         - LIKELIHOOD_UNSPECIFIED: 未指定
+         - VERY_UNLIKELY: 非常不相似
+         - UNLIKELY: 较不相似
+         - POSSIBLE: 可能相似
+         - LIKELY: 较相似
+         - VERY_LIKELY: 非常相似
+      title: Likelihood
+    ListEntitiesResponse:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/Status'
+        entities:
+          type: array
+          title: 实体列表
+          items:
+            $ref: '#/components/schemas/Entity'
+      description: |-
+        系统敏感实体列表应答
+      example:
+        status: {"code": OK, "msg": "成功"}
+        entities: [{
+          "name": "PERSON", "description": "人名"
+        }]
+    PrimitiveTransformation:
+      type: object
+      properties:
+        replace_config:
+          $ref: '#/components/schemas/ReplaceValueConfig'
+        redact_config:
+          $ref: '#/components/schemas/RedactConfig'
+        character_mask_config:
+          $ref: '#/components/schemas/CharacterMaskConfig'
+        crypto_replace_ffx_fpe_config:
+          $ref: '#/components/schemas/CryptoReplaceFfxFpeConfig'
+        fixed_size_bucketing_config:
+          $ref: '#/components/schemas/FixedSizeBucketingConfig'
+        bucketing_config:
+          $ref: '#/components/schemas/BucketingConfig'
+        replace_with_entity_config:
+          $ref: '#/components/schemas/ReplaceWithEntityConfig'
+        time_part_config:
+          $ref: '#/components/schemas/TimePartConfig'
+        crypto_hash_config:
+          $ref: '#/components/schemas/CryptoHashConfig'
+        date_shift_config:
+          $ref: '#/components/schemas/DateShiftConfig'
+      description: 敏感数据脱敏算法配置
+      title: PrimitiveTransformation
+    Range:
+      type: object
+      properties:
+        start:
+          type: string
+          format: int64
+          title: 起始位置
+        end:
+          type: string
+          format: int64
+          title: 结束位置
+      description: '范围跨度信息，范围值为[start, end)'
+      title: Range
+    RecordCondition:
+      type: object
+      properties:
+        expressions:
+          $ref: '#/components/schemas/RecordConditionExpressions'
+          title: 条件表达式
+      description: 数据表的脱敏条件
+      title: RecordCondition
+    RecordLocation:
+      type: object
+      properties:
+        field_id:
+          $ref: '#/components/schemas/FieldId'
+          title: 列名
+        col_index:
+          type: string
+          format: int64
+          title: 列的位置，从0开始计数
+        row_index:
+          type: string
+          format: int64
+          title: 行的位置，从0开始计数
+      description: 识别结果在数据表中的位置信息
+      title: RecordLocation
+    RecordTransformations:
+      type: object
+      properties:
+        field_transformations:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldTransformation'
+          title: 表字段的脱敏算法列表
+      description: 数据表的脱敏算法
+      title: RecordTransformations
+    RedactConfig:
+      type: object
+      description: 脱敏算法：敏感内容擦除
+      title: RedactConfig
+    RedactImageRequest:
+      type: object
+      properties:
+        inspect_config:
+          $ref: '#/components/schemas/InspectConfig'
+          title: 图片中敏感数据识别的配置
+        image_redaction_config:
+          $ref: '#/components/schemas/RedactImageRequestImageRedactionConfig'
+          title: 图片遮罩配置
+        byte_item:
+          $ref: '#/components/schemas/ByteContentItem'
+          description: '图片的字节流，必须是PNG, JPEG, SVG或BMP.'
+        inspect_rule_name:
+          type: string
+          title: 识别规则（非必填）
+      description: 图片敏感信息识别并使用矩形框对敏感文字进行遮罩处理
+      title: RedactImageRequest
+    RedactImageResponse:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/Status'
+          title: 应答的状态信息
+        redacted_image:
+          type: string
+          format: byte
+          title: 遮罩后的图片字节流数据
+        inspect_result:
+          $ref: '#/components/schemas/InspectResult'
+          title: 识别的结果
+      description: 图片敏感信息识别并遮罩的返回结果
+      title: RedactImageResponse
+    ReidentifyContentRequest:
+      type: object
+      properties:
+        reidentify_config:
+          $ref: '#/components/schemas/DeidentifyConfig'
+          title: |-
+            脱敏后的数据解密，必须是可逆的脱敏，当前可逆的脱敏有：
+             - `CryptoReplaceFfxFpeConfig`
+        inspect_config:
+          $ref: '#/components/schemas/InspectConfig'
+          title: 识别规则
+        item:
+          $ref: '#/components/schemas/ContentItem'
+          title: 脱敏后的内容
+        inspect_rule_name:
+          type: string
+          title: 识别规则，保留字段
+        reidentify_rule_name:
+          type: string
+          title: 脱敏解密规则，保留字段
+      description: 对已脱敏的密文进行解密请求，该请求只适用于可逆的脱敏算法，如格式保全加密算法
+      title: ReidentifyContentRequest
+    ReidentifyContentResponse:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/Status'
+          title: 应答的状态信息
+        item:
+          $ref: '#/components/schemas/ContentItem'
+          title: 敏感数据解密后的数据
+        reidentify_result:
+          $ref: '#/components/schemas/ReidentifyResult'
+          title: 敏感数据解密的结果概要
+      description: 对已脱敏的密文进行解密的应答
+      title: ReidentifyContentResponse
+    ReidentifyResult:
+      type: object
+      description: 敏感数据解密的结果概要
+      title: ReidentifyResult
+    RelationalOperator:
+      type: string
+      enum:
+        - RELATIONAL_OPERATOR_UNSPECIFIED
+        - EQUAL_TO
+        - NOT_EQUAL_TO
+        - GREATER_THAN
+        - LESS_THAN
+        - GREATER_THAN_OR_EQUALS
+        - LESS_THAN_OR_EQUALS
+        - EXISTS
+      default: RELATIONAL_OPERATOR_UNSPECIFIED
+      description: |-
+        条件比较
+
+         - EQUAL_TO: 等于
+         - NOT_EQUAL_TO: 不等于
+         - GREATER_THAN: 大于
+         - LESS_THAN: 小于
+         - GREATER_THAN_OR_EQUALS: 大于等于
+         - LESS_THAN_OR_EQUALS: 小于等于
+         - EXISTS: 是否存在
+      title: RelationalOperator
+    ReplaceValueConfig:
+      type: object
+      properties:
+        new_value:
+          $ref: '#/components/schemas/Value'
+          title: 替换的新值
+      description: 脱敏算法：敏感内容替换
+      title: ReplaceValueConfig
+    ReplaceWithEntityConfig:
+      type: object
+      description: 脱敏算法：实体名称替换
+      title: ReplaceWithEntityConfig
+    Status:
+      type: object
+      properties:
+        code:
+          $ref: '#/components/schemas/StatusCode'
+          title: 应答状态码
+        msg:
+          type: string
+          title: 应答消息
+      description: 接口请求的应答状态码、消息
+      title: Status
+    StatusCode:
+      type: string
+      enum:
+        - OK
+        - PARAMETER_ERROR
+        - PERMISSION_DENIED_ERROR
+        - REQUEST_CONTENT_OVERSIZE_ERROR
+        - ENTITY_NOT_FOUND
+        - NOT_SUPPORTED
+      default: OK
+      description: |-
+        应答状态码
+
+         - OK: 成功
+         - PARAMETER_ERROR: 参数有误
+         - PERMISSION_DENIED_ERROR: 非法访问
+         - REQUEST_CONTENT_OVERSIZE_ERROR: 请求内容大小超过限制
+         - ENTITY_NOT_FOUND: 没有找到敏感数据entity
+         - NOT_SUPPORTED: 系统尚未支持
+      title: StatusCode
+    Table:
+      type: object
+      properties:
+        headers:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldId'
+          title: 字段的列表
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/TableRow'
+          title: 记录的列表
+      description: 结构化的数据表，包含表头headers和表记录rows
+      title: Table
+    TimePartConfig:
+      type: object
+      properties:
+        part_to_extract:
+          $ref: '#/components/schemas/TimePartConfigTimePart'
+          title: 年月日周
+      description: 截取时间的部分值
+      title: TimePartConfig
+    TransientCryptoKey:
+      type: object
+      properties:
+        name:
+          type: string
+          title: 密钥名称
+      description: 临时密钥
+      title: TransientCryptoKey
+    UnwrappedCryptoKey:
+      type: object
+      properties:
+        key:
+          type: string
+          format: byte
+          title: 明文密钥字节流，bit长度必须为128/192/256
+      description: 明文状态密钥
+      title: UnwrappedCryptoKey
+    Value:
+      type: object
+      properties:
+        integer_value:
+          type: string
+          format: int64
+        float_value:
+          type: number
+          format: double
+        string_value:
+          type: string
+        boolean_value:
+          type: boolean
+          format: boolean
+        timestamp_value:
+          type: string
+          format: date-time
+        time_value:
+          $ref: '#/components/schemas/typeTimeOfDay'
+        date_value:
+          $ref: '#/components/schemas/typeDate'
+        day_of_week_value:
+          $ref: '#/components/schemas/typeDayOfWeek'
+      description: 通用数据类型
+      title: Value
