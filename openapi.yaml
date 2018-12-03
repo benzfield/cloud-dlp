@@ -176,18 +176,12 @@ paths:
         ```
         {
           "inspect_config": {
-            # 指定了对PERSON和LOCATION进行识别，当entities为空时
-            # 将使用系统内置的敏感实体进行识别
             "entities": [
               {"name": "PERSON"}, 
               {"name": "LOCATION"}
-            ]
-
-            # 指定了识别的精度必须是POSSIBLE及以上
+            ],
             "min_likelihood": "POSSIBLE",
           },
-
-          # 指定了待识别的内容
           "item": {
             "value": "我叫王中华，家住北京市朝阳区"
           }
@@ -198,8 +192,6 @@ paths:
         ```
         {
           "inspect_config": {
-            # 指定了对PERSON和LOCATION进行识别，当entities为空时
-            # 将使用系统内置的敏感实体进行识别
             "entities": [
               {"name": "PERSON"}, 
               {"name": "LOCATION"}
@@ -233,11 +225,9 @@ paths:
                 ]
               }
             ]
-            # 指定了识别的精度必须是POSSIBLE及以上
             "min_likelihood": "POSSIBLE",
           },
 
-          # 指定了待识别的内容
           "item": {
             "table": {
               "headers": [
@@ -268,13 +258,9 @@ paths:
         ```
         {
           "inspect_config": {
-            # 将使用系统内置的敏感实体进行识别
             "entities": []，
-            # 指定了识别的精度必须是POSSIBLE及以上
             "min_likelihood": "POSSIBLE",
           },
-
-          # 指定了待识别的内容
           "item": {
             "byte_item": {
               "type": "IMAGE_JPEG",
