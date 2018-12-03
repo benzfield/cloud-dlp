@@ -65,20 +65,20 @@ paths:
                   summary: 成功
                   value:
                     status: 
-                      code: "OK"
-                      msg: "成功"
+                      code: OK
+                      msg: 成功
                     entities:
-                      - name: "PERSON"
-                        description: "人名"
-                      - name: "LOCATION"
-                        description: "地名"
+                      - name: PERSON
+                        description: 人名
+                      - name: LOCATION
+                        description: 地址
                 failure:
                   summary: 失败
                   value:
-                    status: {"code": ENTITY_NOT_FOUND, "msg": "没有找到敏感实体"}
-                    entities: [{
-                      "name": "PERSON", "description": "人名"
-                    }]
+                    status: 
+                      code: ENTITY_NOT_FOUND
+                      msg: 没有找到敏感实体
+                    entities: []
   /api/v1/content:inspect:
     post:
       tags:
@@ -2165,11 +2165,14 @@ components:
         name:
           type: string
           title: 名称
+          maxLength: 64
         description:
           type: string
           title: 描述
+          maxlength: 1024
       description: 敏感数据实体的定义
-      title: Entity
+      required:
+        - name
     EntityTransformations:
       type: object
       properties:
