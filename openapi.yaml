@@ -1,13 +1,15 @@
 openapi: 3.0.0
 # Added by API Auto Mocking Plugin
 servers:
-  - description: CloudDLP API Auto Mocking
+  - description: CloudDLP API Develop
     url: http://192.168.30.106:30080
+  - description: CloudDLP API Production
+    url: http://192.168.2.58:30080
 info:
+  title: 云安宝CloudDLP API指南
   description: |
     CloudDLP API提供敏感数据的智能识别与脱敏，包括对字符串、文件、数据表、图片进行识别与脱敏处理。有关更多CloudDLP信息，请查阅云安宝官网[http://yunanbao.com.cn]
-  version: "1.2.2-SNAPSHOT"
-  title: 云安宝CloudDLP API指南
+  version: "1.2.0-SNAPSHOT"
   contact:
     email: wangab@yunanbao.com.cn
     url: http://yunanbao.com.cn
@@ -91,7 +93,7 @@ paths:
         
         *更多敏感实体还在持续增加中*
         
-        # 1. 请求JSON格式说明
+        # 请求JSON格式说明
         敏感数据识别的JSON请求体，JSON请求的对象请参考InspectContentRequest定义，一个InspectContentRequest对象中可包含以下子JSON对象：
         * inspect_config，该对象指定了识别的配置信息。可以配置的信息有：
           * entities， 指定实体识别的列表，为空时系统会使用所有内置的实体进行识别。仅指定Entity的name即可，包含PERSON和LOCATION的实体列表示例如下：
@@ -184,107 +186,6 @@ paths:
         ---
         * inspect_rule_name，指定的inspect规则[该选项尚未支持]，本版本中无须指定。说明：用户可以事先将inspect_config存储为inspect_rule对象，调用该接口时可以指定inspect_rule_name来加载之前存储的inspect_config对象而无需每次都指定inspect_config，当inspect_config和inspect_rule_name同时指定的，系统会merge两个对象的配置，当两个对象存在相同的设置时以inspect_config优先。
 
-        ## 2. 请求JSON实例说明
-        * 示例1：使用系统内置敏感实体进行识别。该示例对指定的内容value进行PERSON和LOCATION识别
-        
-        ```
-        {
-          "inspect_config": {
-            "entities": [
-              {"name": "PERSON"}, 
-              {"name": "LOCATION"}
-            ],
-            "min_likelihood": "POSSIBLE",
-          },
-          "item": {
-            "value": "我叫王中华，家住北京市朝阳区"
-          }
-        }
-        ```
-        
-        * 示例2：使用用户自定义的CustomEntity对Table进行识别
-        
-        ```
-        {
-          "inspect_config": {
-            "entities": [
-              {"name": "PERSON"}, 
-              {"name": "LOCATION"}
-            ]，
-            "custom_entities": [
-              {
-                "entity": {
-                  "name": "CUSTOM_NAME"
-                },
-                "likelihood": "POSSIBLE",
-                "regex": {
-                  "pattern": "(Tom|Tony)"
-                  "case_insensitive": true
-                },
-                "detection_rules": [
-                  {
-                    "hotword_rule": {
-                      "hotword_regex": {
-                        "pattern": "name",
-                        "case_insensitive": true
-                      },
-                      "proximity": {
-                        "window_before": 10,
-                        "window_after": 10
-                      },
-                      "likelihood_adjustment": {
-                        "relative_likelihood": 2
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-            "min_likelihood": "POSSIBLE",
-          },
-
-          "item": {
-            "table": {
-              "headers": [
-                {"name": "ID"},
-                {"name": "NAME"},
-                {"name": "LOCATION"}
-              ],
-              "rows": [
-                {
-                  "values": [
-                    "string_value": "0001", 
-                    "string_value": "Jim", 
-                    "string_value": "NewYork"]
-                },
-                {
-                  "values": [
-                    "string_value": "0002", 
-                    "string_value": "Tom", 
-                    "string_value": "Beijing"]
-                }
-              ]
-            }
-          }
-        }
-        ```
-
-        * 示例3：使用系统支持的所有敏感实体进行图片中的敏感数据识别
-        
-        ```
-        {
-          "inspect_config": {
-            "entities": []，
-            "min_likelihood": "POSSIBLE",
-          },
-          "item": {
-            "byte_item": {
-              "type": "IMAGE_JPEG",
-              "data": "此处为图片二进制数据的base64编码"
-            }
-          }
-        }
-        ```
       operationId: InspectContent
       requestBody:
         description: 敏感数据识别请求对象InspectContentRequest，请参考InspectContentRequest对象定义。
@@ -293,26 +194,74 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/InspectContentRequest'
-            example:
-              inspect_config: 
-                entities: [
-                  {"name": "PERSON"},
-                  {"name": "CHINA_MOBILE"}]
-                custom_entities: [
-                  {
-                    "entity": {
-                      "name": "PERSON_ENGLISH_NAME"
-                    },
-                    "likelihood": "POSSIBLE",
-                    "regex": {
-                      "pattern": "(jay)",
-                      "case_insensitive": true
-                    }
-                  }]
-                min_likelihood: POSSIBLE
-                exclude_entities: false
-              item: 
-                value: 我叫周杰伦（Jay），身份证号320902198101011000,  北京市手机13683130000，邮箱zjl@yunanbao.com.cn
+            examples:
+              inspect_string:
+                summary: 识别字符串中的敏感数据
+                value:
+                  inspect_config: 
+                    entities:
+                      - name: PERSON
+                      - name: CHINA_MOBILE
+                    custom_entities:
+                      - entity:
+                          name: PERSON_ENGLISH_NAME
+                        likelihood: POSSIBLE
+                        regex:
+                          pattern: (jay)
+                          case_insensitive: true
+                    min_likelihood: POSSIBLE
+                    exclude_entities: false
+                  item: 
+                    value: 我叫周杰伦（Jay），身份证号320902198101011000,  北京市手机13683130000，邮箱zjl@yunanbao.com.cn
+              inspect_table:
+                summary: 识别表格中的敏感数据
+                value:
+                  inspect_config: 
+                    entities:
+                      - name: PERSON
+                      - name: CHINA_MOBILE
+                    custom_entities: 
+                      - entity:
+                          name: PERSON_ENGLISH_NAME
+                        likelihood: POSSIBLE
+                        regex:
+                          pattern: (jay)
+                          case_insensitive: true
+                      - entity:
+                          name: LOCATION_ENGLISH_NAME
+                        likelihood: POSSIBLE
+                        regex:
+                          pattern: (beijing|newyork)
+                          case_insensitive: true
+                    min_likelihood: POSSIBLE
+                    exclude_entities: false
+                  item: 
+                    table:
+                      headers:
+                        - name: ID
+                        - name: NAME
+                        - name: LOCATION
+                      rows:
+                        - values:
+                          - string_value: 0001
+                          - string_value: Jim
+                          - string_value: NewYork
+                        - values:
+                          - string_value: 0002
+                          - string_value: Tom
+                          - string_value: Beijing
+              inspect_image:
+                summary: 识别图片中的敏感数据
+                value:
+                  inspect_config: 
+                    entities: []
+                    custom_entities: [
+                    min_likelihood: POSSIBLE
+                    exclude_entities: false
+                  item: 
+                    byte_item: 
+                      type: IMAGE_JPEG
+                      data: 此处为图片二进制数据的base64编码
       responses:
         '200':
           description: |
