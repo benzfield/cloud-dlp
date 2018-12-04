@@ -859,7 +859,7 @@ paths:
                             - name: NAME
                           primitive_transformation:
                             character_mask_config:
-                              masking_character: *
+                              masking_character: "*"
                               number_to_mask: 5
                               offset: 0
                               reverse_order: true
@@ -873,7 +873,7 @@ paths:
                               - name: LOCATION
                             primitive_transformation:
                               character_mask_config:
-                                masking_character: '#'
+                                masking_character: "#"
                                 number_to_mask: 2
                                 offset: 0
                                 reverse_order: true
